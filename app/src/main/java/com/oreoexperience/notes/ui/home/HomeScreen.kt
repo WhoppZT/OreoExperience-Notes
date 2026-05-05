@@ -1,6 +1,8 @@
 package com.oreoexperience.notes.ui.home
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.EaseInOutCubic
+import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -110,11 +112,13 @@ fun HomeScreen(
             // Cuando todavía no hay discursos guardados, el FAB respira
             // suave para guiar la mirada del usuario hacia él.
             val infinite = rememberInfiniteTransition(label = "fabPulse")
+            // Pulso "respiración": amplitud chica + duración larga + easing
+            // cosenoidal para evitar el ritmo taquicárdico que tenía antes.
             val rawPulse by infinite.animateFloat(
                 initialValue = 1.0f,
-                targetValue = 1.05f,
+                targetValue = 1.04f,
                 animationSpec = infiniteRepeatable(
-                    animation = tween(1_400),
+                    animation = tween(1_800, easing = EaseInOutCubic),
                     repeatMode = RepeatMode.Reverse,
                 ),
                 label = "fabPulseScale",
@@ -251,15 +255,19 @@ private fun DiscursoRow(d: Discurso, onClick: () -> Unit) {
 private fun AnimatedRow(index: Int, content: @Composable () -> Unit) {
     val visibleState = remember { MutableTransitionState(false) }
     LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay((index * 35L).coerceAtMost(500L))
+        // Stagger más corto (22ms) y capeado a 360ms para que la lista
+        // termine de aparecer rápido aunque tengas muchos discursos.
+        kotlinx.coroutines.delay((index * 22L).coerceAtMost(360L))
         visibleState.targetState = true
     }
     AnimatedVisibility(
         visibleState = visibleState,
-        enter = fadeIn(animationSpec = tween(durationMillis = 280)) +
+        // EaseOutCubic + amplitud baja (it/10 en lugar de it/6) hace que
+        // las cards "asomen" en lugar de saltar.
+        enter = fadeIn(animationSpec = tween(durationMillis = 320, easing = EaseOutCubic)) +
             slideInVertically(
-                animationSpec = tween(durationMillis = 320),
-                initialOffsetY = { it / 6 },
+                animationSpec = tween(durationMillis = 360, easing = EaseOutCubic),
+                initialOffsetY = { it / 10 },
             ),
     ) {
         content()

@@ -2,7 +2,7 @@ package com.oreoexperience.notes.ui.components
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
@@ -143,22 +143,28 @@ fun FloatingTimerWindow(
             label = "floatingTimerRatio",
         )
 
-        // Pulso suave cuando te pasaste del objetivo (sólo si está corriendo).
+        // Pulso "respiración" cuando te pasaste del objetivo. Amplitud chica
+        // (1.04) + duración larga (1100ms) + EaseInOutCubic = late orgánico,
+        // no taquicárdico.
         val pulseTransition = rememberInfiniteTransition(label = "timerPulse")
         val pulseScale by pulseTransition.animateFloat(
             initialValue = 1f,
-            targetValue = if (ratio >= 1f && running) 1.06f else 1.0001f,
+            targetValue = if (ratio >= 1f && running) 1.04f else 1.0001f,
             animationSpec = infiniteRepeatable(
-                animation = tween(720, easing = FastOutSlowInEasing),
+                animation = tween(1_100, easing = EaseInOutCubic),
                 repeatMode = RepeatMode.Reverse,
             ),
             label = "timerPulseScale",
         )
 
-        // Bounce suave cuando arrancás / pausás.
+        // Press scale al play/pause: spring sin rebote para que se sienta
+        // un "settle" suave en vez de un golpe.
         val pressScale by animateFloatAsState(
-            targetValue = if (running) 1.0f else 0.98f,
-            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+            targetValue = if (running) 1.0f else 0.985f,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow,
+            ),
             label = "timerPressScale",
         )
 
@@ -183,8 +189,12 @@ fun FloatingTimerWindow(
             AnimatedContent(
                 targetState = expanded,
                 transitionSpec = {
-                    (fadeIn(tween(220)) + scaleIn(tween(220), initialScale = 0.92f))
-                        .togetherWith(fadeOut(tween(140)) + scaleOut(tween(140), targetScale = 0.92f))
+                    (fadeIn(tween(280, easing = EaseInOutCubic)) +
+                        scaleIn(tween(280, easing = EaseInOutCubic), initialScale = 0.94f))
+                        .togetherWith(
+                            fadeOut(tween(180, easing = EaseInOutCubic)) +
+                                scaleOut(tween(180, easing = EaseInOutCubic), targetScale = 0.94f)
+                        )
                 },
                 label = "timerModeSwitch",
             ) { isExpanded ->

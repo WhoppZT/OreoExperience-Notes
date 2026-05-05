@@ -31,23 +31,24 @@ import kotlin.random.Random
 @Composable
 fun AuroraBackground(modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "aurora")
+    // Dos fases lentas con períodos primos (19s y 23s) y LinearEasing.
+    // El cálculo posterior pasa cada `t` por funciones cosenoidales, lo
+    // cual elimina cualquier discontinuidad en el wraparound 1→0 y deja
+    // un drift suave y orgánico que no se siente "loop".
     val t by transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 16_000, easing = LinearEasing),
+            animation = tween(durationMillis = 19_000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart,
         ),
         label = "auroraT",
     )
-    // Segunda fase con período distinto para que el resultado no se sienta
-    // periódico. La superposición de [t] y [t2] hace que las constelaciones
-    // de blobs no se repitan en el mismo lugar.
     val t2 by transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 11_000, easing = LinearEasing),
+            animation = tween(durationMillis = 23_000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart,
         ),
         label = "auroraT2",

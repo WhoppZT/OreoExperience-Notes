@@ -1,5 +1,7 @@
 package com.oreoexperience.notes.ui.splash
 
+import androidx.compose.animation.core.EaseInOutCubic
+import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -53,8 +55,8 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
 
-private const val SPLASH_DURATION_MS = 2200L
-private const val FADE_OUT_MS = 540
+private const val SPLASH_DURATION_MS = 2400L
+private const val FADE_OUT_MS = 620
 
 /**
  * Pantalla de carga con estética Aurora: fondo nocturno oscuro, estrellas
@@ -192,11 +194,13 @@ private data class StarData(
 @Composable
 private fun PulsingHalo(modifier: Modifier = Modifier) {
     val inf = rememberInfiniteTransition(label = "halo")
+    // Pulso sutil del halo: amplitud chica + duración larga + easing
+    // cosenoidal para que el latido se sienta orgánico, no mecánico.
     val haloScale by inf.animateFloat(
         initialValue = 1.0f,
-        targetValue = 1.12f,
+        targetValue = 1.06f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1_500, easing = FastOutSlowInEasing),
+            animation = tween(2_400, easing = EaseInOutCubic),
             repeatMode = RepeatMode.Reverse,
         ),
         label = "haloScale",
@@ -225,13 +229,15 @@ private fun PulsingHalo(modifier: Modifier = Modifier) {
 
 @Composable
 private fun LogoWithRing() {
-    // Escala con bounce al aparecer
-    var targetScale by remember { mutableFloatStateOf(0.5f) }
+    // Escala de aparición: spring sin rebote (NoBouncy) — el logo asoma
+    // y se asienta sin overshoot duro. Más natural que el LowBouncy
+    // anterior, que cortaba el feeling "calmo" del Aurora.
+    var targetScale by remember { mutableFloatStateOf(0.78f) }
     val scale by animateFloatAsState(
         targetValue = targetScale,
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioLowBouncy,
-            stiffness = Spring.StiffnessMediumLow,
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessLow,
         ),
         label = "logoScale",
     )
@@ -239,22 +245,24 @@ private fun LogoWithRing() {
     var targetAlpha by remember { mutableFloatStateOf(0f) }
     val logoAlpha by animateFloatAsState(
         targetValue = targetAlpha,
-        animationSpec = tween(600, easing = FastOutSlowInEasing),
+        animationSpec = tween(720, easing = EaseOutCubic),
         label = "logoAlpha",
     )
     LaunchedEffect(Unit) {
-        delay(100)
+        delay(80)
         targetScale = 1f
         targetAlpha = 1f
     }
 
-    // Rotación del anillo orbital
+    // Rotación del anillo orbital — más lenta y constante (la velocidad
+    // angular constante sí queda bien con LinearEasing, pero a 4.5s
+    // se siente meditativa en vez de apurada).
     val inf = rememberInfiniteTransition(label = "ring")
     val ringRotation by inf.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2_400, easing = LinearEasing),
+            animation = tween(4_500, easing = LinearEasing),
         ),
         label = "ringRotation",
     )
@@ -318,8 +326,12 @@ private fun LogoWithRing() {
 @Composable
 private fun AppTitle() {
     var alpha by remember { mutableFloatStateOf(0f) }
-    val animAlpha by animateFloatAsState(alpha, tween(600), label = "titleAlpha")
-    LaunchedEffect(Unit) { delay(200); alpha = 1f }
+    val animAlpha by animateFloatAsState(
+        alpha,
+        tween(720, easing = EaseOutCubic),
+        label = "titleAlpha",
+    )
+    LaunchedEffect(Unit) { delay(220); alpha = 1f }
     Text(
         text = "OreoExperience",
         color = Color.White.copy(alpha = animAlpha),
@@ -332,8 +344,12 @@ private fun AppTitle() {
 @Composable
 private fun AccentSubtitle() {
     var alpha by remember { mutableFloatStateOf(0f) }
-    val animAlpha by animateFloatAsState(alpha, tween(700), label = "accentAlpha")
-    LaunchedEffect(Unit) { delay(350); alpha = 0.95f }
+    val animAlpha by animateFloatAsState(
+        alpha,
+        tween(820, easing = EaseOutCubic),
+        label = "accentAlpha",
+    )
+    LaunchedEffect(Unit) { delay(380); alpha = 0.95f }
     Text(
         text = "NOTAS",
         color = OreoPalette.Accent.copy(alpha = animAlpha),
@@ -346,8 +362,12 @@ private fun AccentSubtitle() {
 @Composable
 private fun LoadingLabel() {
     var alpha by remember { mutableFloatStateOf(0f) }
-    val animAlpha by animateFloatAsState(alpha, tween(800), label = "loadAlpha")
-    LaunchedEffect(Unit) { delay(500); alpha = 1f }
+    val animAlpha by animateFloatAsState(
+        alpha,
+        tween(900, easing = EaseOutCubic),
+        label = "loadAlpha",
+    )
+    LaunchedEffect(Unit) { delay(540); alpha = 1f }
     Text(
         text = "Cargando experiencia…",
         color = Color.White.copy(alpha = animAlpha * 0.65f),
@@ -363,12 +383,12 @@ private fun ProgressBar() {
     val animProg by animateFloatAsState(
         targetValue = progress,
         animationSpec = tween(
-            durationMillis = (SPLASH_DURATION_MS - 300).toInt(),
-            easing = FastOutSlowInEasing,
+            durationMillis = (SPLASH_DURATION_MS - 350).toInt(),
+            easing = EaseOutCubic,
         ),
         label = "splashProgress",
     )
-    LaunchedEffect(Unit) { delay(200); progress = 1f }
+    LaunchedEffect(Unit) { delay(220); progress = 1f }
 
     val barW = 240.dp
     val barH = 4.dp

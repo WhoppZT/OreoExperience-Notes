@@ -1,9 +1,11 @@
 package com.oreoexperience.notes.ui.nav
 
-import androidx.compose.animation.AnimatedContentTransitionScope.SlideDirection
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -32,7 +34,15 @@ object Routes {
     fun viewer(id: Long) = "viewer/$id"
 }
 
-private const val NAV_DURATION_MS = 280
+// Transiciones suaves entre pantallas: tween con FastOutSlowInEasing
+// (curva estándar de Material) + slide horizontal de baja amplitud para
+// que se sienta un "deslizamiento" suave en lugar de un corte. La amplitud
+// es ~22% del ancho — lo justo para insinuar dirección sin lanzar la
+// pantalla entera al costado.
+private const val NAV_DURATION_MS = 360
+private const val NAV_EXIT_DURATION_MS = 260
+private fun forwardOffset(width: Int): Int = (width * 0.22f).toInt()
+private fun backwardOffset(width: Int): Int = -(width * 0.22f).toInt()
 
 @Composable
 fun AppNav() {
@@ -54,20 +64,32 @@ fun AppNav() {
             // Cada `composable` puede sobrescribirlas si quiere algo
             // distinto, pero por ahora el lookup uniforme se siente bien.
             enterTransition = {
-                fadeIn(tween(NAV_DURATION_MS)) +
-                    slideIntoContainer(SlideDirection.Start, tween(NAV_DURATION_MS))
+                fadeIn(tween(NAV_DURATION_MS, easing = FastOutSlowInEasing)) +
+                    slideInHorizontally(
+                        animationSpec = tween(NAV_DURATION_MS, easing = FastOutSlowInEasing),
+                        initialOffsetX = ::forwardOffset,
+                    )
             },
             exitTransition = {
-                fadeOut(tween(NAV_DURATION_MS / 2)) +
-                    slideOutOfContainer(SlideDirection.Start, tween(NAV_DURATION_MS))
+                fadeOut(tween(NAV_EXIT_DURATION_MS, easing = FastOutSlowInEasing)) +
+                    slideOutHorizontally(
+                        animationSpec = tween(NAV_DURATION_MS, easing = FastOutSlowInEasing),
+                        targetOffsetX = ::backwardOffset,
+                    )
             },
             popEnterTransition = {
-                fadeIn(tween(NAV_DURATION_MS)) +
-                    slideIntoContainer(SlideDirection.End, tween(NAV_DURATION_MS))
+                fadeIn(tween(NAV_DURATION_MS, easing = FastOutSlowInEasing)) +
+                    slideInHorizontally(
+                        animationSpec = tween(NAV_DURATION_MS, easing = FastOutSlowInEasing),
+                        initialOffsetX = ::backwardOffset,
+                    )
             },
             popExitTransition = {
-                fadeOut(tween(NAV_DURATION_MS / 2)) +
-                    slideOutOfContainer(SlideDirection.End, tween(NAV_DURATION_MS))
+                fadeOut(tween(NAV_EXIT_DURATION_MS, easing = FastOutSlowInEasing)) +
+                    slideOutHorizontally(
+                        animationSpec = tween(NAV_DURATION_MS, easing = FastOutSlowInEasing),
+                        targetOffsetX = ::forwardOffset,
+                    )
             },
         ) {
             composable(Routes.Home) {
