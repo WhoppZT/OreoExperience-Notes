@@ -70,4 +70,4 @@ app/
 
 ## Licencia
 
-[MIT](LICENSE) — copiá, modificá, redistribuí libremente.
+[MIT](LICENSE) — libremente.
