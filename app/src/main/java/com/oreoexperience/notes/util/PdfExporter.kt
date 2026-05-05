@@ -106,17 +106,20 @@ object PdfExporter {
         y += 8f
 
         if (points.isNotEmpty()) {
-            ensure(20f); drawWrapped("Bosquejo", h2); y += 4f
-            points.forEachIndexed { idx, p ->
-                drawWrapped("${idx + 1}. ${p.text}", body)
-                p.subpoints.filter { it.isNotBlank() }.forEach { s ->
-                    drawWrapped("• $s", body, indent = 18f)
+            ensure(20f); drawWrapped("Puntos del discurso", h2); y += 6f
+            points.forEach { p ->
+                if (p.text.isNotBlank()) {
+                    drawWrapped(p.text, h2)
                 }
-                y += 4f
+                if (p.body.isNotBlank()) {
+                    drawWrapped(p.body, body)
+                }
+                y += 6f
             }
         }
 
         if (d.notes.isNotBlank()) {
+            // Compatibilidad con discursos viejos.
             ensure(20f); drawWrapped("Notas", h2); y += 4f
             drawWrapped(d.notes, mono)
         }

@@ -23,5 +23,11 @@ object OreoPalette {
     val Outline   = Color(0x33B68CFF)   // contornos sutiles del cristal
     val GlassFill = Color(0x18FFFFFF)   // relleno semi-transparente de las cards
     val GlassFillStrong = Color(0x26FFFFFF)
+    /** Variante "frosted" muy opaca para cards de lectura: oscurece bastante
+     *  el fondo Aurora detrás para que el texto resalte como si estuviera
+     *  sobre vidrio escarchado. */
+    val GlassFillFrosted = Color(0xCC0E0F2E)
     val DangerFill = Color(0xFFFF6B8A)
+    val WarnFill   = Color(0xFFFFC857)
+    val OkFill     = Color(0xFF7CE7B1)
 }

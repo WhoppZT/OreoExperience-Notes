@@ -16,11 +16,12 @@
     <string name="editor_title_hint">Título del discurso</string>
     <string name="editor_scriptures_hint">Texto base / escrituras (ej. Mat 24:14)</string>
     <string name="editor_tags_hint">Etiquetas (separadas por coma)</string>
-    <string name="editor_notes_hint">Notas libres (markdown soportado)</string>
-    <string name="editor_section_points">Puntos del bosquejo</string>
-    <string name="editor_add_point">Agregar punto</string>
-    <string name="editor_point_hint">Punto principal</string>
-    <string name="editor_subpoint_hint">Sub-punto</string>
+    <string name="editor_section_title_hint">Título de la sección (ej: Introducción)</string>
+    <string name="editor_section_body_hint">Texto de esta sección…</string>
+    <string name="editor_target_minutes_hint">Duración objetivo (minutos)</string>
+    <string name="editor_target_minutes_help">0 = sin objetivo. El cronómetro de la vista lectura usa este valor.</string>
+    <string name="editor_section_points">Puntos del discurso</string>
+    <string name="editor_add_point">Agregar sección</string>
     <string name="editor_save">Guardar</string>
     <string name="editor_saved">Guardado</string>
     <string name="editor_delete">Eliminar</string>
@@ -39,6 +40,12 @@
     <string name="backup_import">Importar respaldo (JSON)</string>
     <string name="backup_imported">Respaldo importado</string>
     <string name="backup_failed">Error al importar el respaldo</string>
+
+    <!-- Timer -->
+    <string name="timer_start">Iniciar</string>
+    <string name="timer_pause">Pausar</string>
+    <string name="timer_reset">Reiniciar</string>
+    <string name="timer_no_target">Sin objetivo</string>
 
     <!-- Common -->
     <string name="action_cancel">Cancelar</string>

@@ -1,5 +1,14 @@
 package com.oreoexperience.notes.ui.home
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,14 +20,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
@@ -30,10 +41,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -93,12 +107,26 @@ fun HomeScreen(
             )
         },
         floatingActionButton = {
+            // Cuando todavía no hay discursos guardados, el FAB respira
+            // suave para guiar la mirada del usuario hacia él.
+            val infinite = rememberInfiniteTransition(label = "fabPulse")
+            val rawPulse by infinite.animateFloat(
+                initialValue = 1.0f,
+                targetValue = 1.05f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(1_400),
+                    repeatMode = RepeatMode.Reverse,
+                ),
+                label = "fabPulseScale",
+            )
+            val pulse = if (state.items.isEmpty()) rawPulse else 1.0f
             ExtendedFloatingActionButton(
                 onClick = onNew,
                 icon = { Icon(Icons.Outlined.Add, null) },
                 text = { Text(stringResource(R.string.home_fab_new)) },
                 containerColor = OreoPalette.Accent,
                 contentColor = Color(0xFF1A0B33),
+                modifier = Modifier.scale(pulse),
             )
         },
     ) { padding ->
@@ -140,8 +168,10 @@ fun HomeScreen(
                     contentPadding = PaddingValues(top = 4.dp, bottom = 96.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    items(state.items, key = { it.id }) { d ->
-                        DiscursoRow(d, onClick = { onOpen(d.id) })
+                    itemsIndexed(state.items, key = { _, d -> d.id }) { index, d ->
+                        AnimatedRow(index = index) {
+                            DiscursoRow(d, onClick = { onOpen(d.id) })
+                        }
                     }
                 }
             }
@@ -185,13 +215,54 @@ private fun DiscursoRow(d: Discurso, onClick: () -> Unit) {
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                Text(
-                    text = df.format(Date(d.updatedAt)),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = OreoPalette.OnSurfaceMuted,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = df.format(Date(d.updatedAt)),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = OreoPalette.OnSurfaceMuted,
+                    )
+                    if (d.targetDurationSec > 0) {
+                        Icon(
+                            Icons.Outlined.Timer,
+                            contentDescription = null,
+                            tint = OreoPalette.AccentSub,
+                            modifier = Modifier
+                                .padding(start = 10.dp)
+                                .size(14.dp),
+                        )
+                        Text(
+                            text = " ${d.targetDurationSec / 60} min",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = OreoPalette.AccentSub,
+                        )
+                    }
+                }
             }
         }
+    }
+}
+
+/**
+ * Anima la entrada de cada row de la lista con un fade + slide hacia
+ * arriba. El delay escalonado es proporcional al índice (con un cap
+ * para que la lista no tarde demasiado en aparecer si hay muchos items).
+ */
+@Composable
+private fun AnimatedRow(index: Int, content: @Composable () -> Unit) {
+    val visibleState = remember { MutableTransitionState(false) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay((index * 35L).coerceAtMost(500L))
+        visibleState.targetState = true
+    }
+    AnimatedVisibility(
+        visibleState = visibleState,
+        enter = fadeIn(animationSpec = tween(durationMillis = 280)) +
+            slideInVertically(
+                animationSpec = tween(durationMillis = 320),
+                initialOffsetY = { it / 6 },
+            ),
+    ) {
+        content()
     }
 }
 

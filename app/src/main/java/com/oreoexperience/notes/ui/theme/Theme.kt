@@ -2,9 +2,12 @@ package com.oreoexperience.notes.ui.theme
 
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -63,9 +66,23 @@ fun OreoExperienceTheme(
         }
     }
 
+    // Pintamos la selección de texto en violeta Aurora para que combine
+    // con el resto del tema (los handles redondos también heredan estos
+    // colores). El `backgroundColor` queda con alpha bajo para no tapar
+    // el texto y el `handleColor` opaco para que sean visibles sobre
+    // cualquier card del fondo.
+    val auroraSelectionColors = TextSelectionColors(
+        handleColor = OreoPalette.Accent,
+        backgroundColor = OreoPalette.Accent.copy(alpha = 0.32f),
+    )
+
     MaterialTheme(
         colorScheme = scheme,
         typography = OreoTypography,
-        content = content,
-    )
+    ) {
+        CompositionLocalProvider(
+            LocalTextSelectionColors provides auroraSelectionColors,
+            content = content,
+        )
+    }
 }

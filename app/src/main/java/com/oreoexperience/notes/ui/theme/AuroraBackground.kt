@@ -35,10 +35,22 @@ fun AuroraBackground(modifier: Modifier = Modifier) {
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 24_000, easing = LinearEasing),
+            animation = tween(durationMillis = 16_000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart,
         ),
         label = "auroraT",
+    )
+    // Segunda fase con período distinto para que el resultado no se sienta
+    // periódico. La superposición de [t] y [t2] hace que las constelaciones
+    // de blobs no se repitan en el mismo lugar.
+    val t2 by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 11_000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "auroraT2",
     )
 
     val stars = remember {
@@ -66,22 +78,23 @@ fun AuroraBackground(modifier: Modifier = Modifier) {
         val a = cos(t * twoPi).toFloat()
         val b = sin(t * twoPi * 0.7f).toFloat()
         val c = cos(t * twoPi * 0.4f).toFloat()
-        val d = sin(t * twoPi * 0.5f).toFloat()
+        val d = sin(t2 * twoPi * 0.55f).toFloat()
+        val e = cos(t2 * twoPi * 0.9f).toFloat()
 
         drawBlob(
-            center = Offset(w * (0.20f + 0.05f * a), h * 0.25f),
+            center = Offset(w * (0.20f + 0.09f * a), h * (0.25f + 0.05f * e)),
             radius = w * 0.85f,
             color = OreoPalette.Mesh1,
             innerAlpha = 0.85f,
         )
         drawBlob(
-            center = Offset(w * (0.85f + 0.05f * b), h * (0.65f + 0.04f * c)),
+            center = Offset(w * (0.85f + 0.08f * b), h * (0.65f + 0.06f * c)),
             radius = w * 0.95f,
             color = OreoPalette.Mesh2,
             innerAlpha = 0.7f,
         )
         drawBlob(
-            center = Offset(w * 0.5f, h * (1.05f + 0.03f * d)),
+            center = Offset(w * (0.5f + 0.06f * e), h * (1.05f + 0.05f * d)),
             radius = w * 1.1f,
             color = OreoPalette.Mesh3,
             innerAlpha = 0.55f,

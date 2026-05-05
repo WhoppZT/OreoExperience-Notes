@@ -22,21 +22,29 @@ object ExportUtil {
         if (d.tags.isNotBlank()) {
             appendLine("Etiquetas: ${d.tags}")
         }
+        if (d.targetDurationSec > 0) {
+            appendLine("Duración objetivo: ${d.targetDurationSec / 60} min")
+        }
         appendLine("Última actualización: ${DateFormat.getDateTimeInstance().format(Date(d.updatedAt))}")
 
         if (points.isNotEmpty()) {
             appendLine()
-            appendLine("Bosquejo")
-            appendLine("--------")
-            points.forEachIndexed { idx, p ->
-                appendLine("${idx + 1}. ${p.text}")
-                p.subpoints.filter { it.isNotBlank() }.forEach { sub ->
-                    appendLine("    - $sub")
+            appendLine("Puntos del discurso")
+            appendLine("--------------------")
+            points.forEach { p ->
+                appendLine()
+                if (p.text.isNotBlank()) {
+                    appendLine(p.text)
+                }
+                if (p.body.isNotBlank()) {
+                    appendLine(p.body)
                 }
             }
         }
 
         if (d.notes.isNotBlank()) {
+            // Discursos viejos pueden traer todavía contenido en este campo
+            // (ya migrado en el editor, pero el export se sirve directo del DB).
             appendLine()
             appendLine("Notas")
             appendLine("-----")
@@ -49,18 +57,24 @@ object ExportUtil {
         appendLine()
         if (d.scriptures.isNotBlank()) appendLine("**Texto base:** ${d.scriptures}")
         if (d.tags.isNotBlank()) appendLine("**Etiquetas:** ${d.tags}")
+        if (d.targetDurationSec > 0) appendLine("**Duración objetivo:** ${d.targetDurationSec / 60} min")
         appendLine("_Actualizado: ${DateFormat.getDateTimeInstance().format(Date(d.updatedAt))}_")
         if (points.isNotEmpty()) {
             appendLine()
-            appendLine("## Bosquejo")
-            points.forEachIndexed { idx, p ->
-                appendLine("${idx + 1}. **${p.text}**")
-                p.subpoints.filter { it.isNotBlank() }.forEach { sub ->
-                    appendLine("    - $sub")
+            appendLine("## Puntos del discurso")
+            points.forEach { p ->
+                if (p.text.isNotBlank()) {
+                    appendLine()
+                    appendLine("### ${p.text}")
+                }
+                if (p.body.isNotBlank()) {
+                    appendLine()
+                    appendLine(p.body)
                 }
             }
         }
         if (d.notes.isNotBlank()) {
+            // Compatibilidad con discursos viejos.
             appendLine()
             appendLine("## Notas")
             appendLine()
