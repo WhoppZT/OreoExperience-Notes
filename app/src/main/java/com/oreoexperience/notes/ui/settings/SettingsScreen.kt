@@ -5,9 +5,8 @@ package com.oreoexperience.notes.ui.settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts.CreateDocument
 import androidx.activity.result.contract.ActivityResultContracts.OpenDocument
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -60,6 +59,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.oreoexperience.notes.data.ThemeMode
 import com.oreoexperience.notes.ui.LocalAppContainer
+import com.oreoexperience.notes.ui.components.InlineStatusMessage
+import com.oreoexperience.notes.ui.theme.OreoMotion
 import com.oreoexperience.notes.ui.theme.OreoPalette
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -251,12 +252,8 @@ fun SettingsScreen(
 
             snackText?.let { msg ->
                 item {
-                    Text(
+                    InlineStatusMessage(
                         text = msg,
-                        color = OreoPalette.AccentSub,
-                        fontSize = 13.sp,
-                        modifier = Modifier
-                            .padding(horizontal = 18.dp, vertical = 8.dp),
                     )
                 }
             }
@@ -322,7 +319,7 @@ private fun SectionCard(content: @Composable () -> Unit) {
             .padding(horizontal = 14.dp)
             .background(
                 color = OreoPalette.SurfaceCard,
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(20.dp),
             ),
     ) { content() }
 }
@@ -396,10 +393,7 @@ private fun ChevronRow(
     val pressed by interaction.collectIsPressedAsState()
     val pressScale by animateFloatAsState(
         targetValue = if (pressed) 0.98f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
+        animationSpec = tween(120, easing = OreoMotion.EaseOut),
         label = "settingsRowScale",
     )
     Row(
@@ -540,5 +534,8 @@ private fun ThemePicker(
             }
         },
         containerColor = OreoPalette.SurfaceCard,
+        titleContentColor = OreoPalette.OnSurface,
+        textContentColor = OreoPalette.OnSurfaceMuted,
+        shape = RoundedCornerShape(28.dp),
     )
 }

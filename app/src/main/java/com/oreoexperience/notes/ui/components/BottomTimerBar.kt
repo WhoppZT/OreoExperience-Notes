@@ -121,12 +121,12 @@ fun BottomTimerBar(
             .padding(horizontal = 12.dp, vertical = 8.dp)
             .background(
                 color = OreoPalette.SurfaceCard,
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(22.dp),
             )
             .border(
                 width = 1.dp,
                 color = borderColor,
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(22.dp),
             )
             .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {

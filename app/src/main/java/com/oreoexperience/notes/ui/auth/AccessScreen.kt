@@ -105,7 +105,7 @@ fun AccessScreen(onUnlocked: (String) -> Unit) {
                 .alpha(cardAlpha)
                 .background(
                     color = OreoPalette.SurfaceCard,
-                    shape = RoundedCornerShape(28.dp),
+                    shape = RoundedCornerShape(30.dp),
                 )
                 .padding(22.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -180,7 +180,7 @@ fun AccessScreen(onUnlocked: (String) -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(18.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = OreoPalette.Accent,
                     contentColor = Color.White,

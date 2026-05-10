@@ -2,9 +2,11 @@ package com.oreoexperience.notes.ui.theme
 
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -13,6 +15,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import com.oreoexperience.notes.data.ThemeMode
 
@@ -72,6 +75,14 @@ private fun iosLightScheme() = lightColorScheme(
     onError = Color.White,
 )
 
+private val OreoShapes = Shapes(
+    extraSmall = RoundedCornerShape(12.dp),
+    small = RoundedCornerShape(16.dp),
+    medium = RoundedCornerShape(20.dp),
+    large = RoundedCornerShape(28.dp),
+    extraLarge = RoundedCornerShape(32.dp),
+)
+
 /**
  * Tema "iOS Notes" con soporte light + dark + system. La paleta
  * activa se determina con [themeMode]; si es [ThemeMode.SYSTEM] se
@@ -118,6 +129,7 @@ fun OreoExperienceTheme(
     MaterialTheme(
         colorScheme = if (isDark) iosDarkScheme() else iosLightScheme(),
         typography = OreoTypography,
+        shapes = OreoShapes,
     ) {
         CompositionLocalProvider(
             LocalTextSelectionColors provides selection,

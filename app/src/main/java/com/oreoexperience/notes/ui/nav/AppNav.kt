@@ -1,6 +1,5 @@
 package com.oreoexperience.notes.ui.nav
 
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -29,6 +28,7 @@ import com.oreoexperience.notes.ui.home.HomeScreen
 import com.oreoexperience.notes.ui.onboarding.OnboardingScreen
 import com.oreoexperience.notes.ui.settings.SettingsScreen
 import com.oreoexperience.notes.ui.splash.SplashScreen
+import com.oreoexperience.notes.ui.theme.OreoMotion
 import com.oreoexperience.notes.ui.theme.OreoPalette
 import com.oreoexperience.notes.ui.trash.TrashScreen
 
@@ -40,13 +40,11 @@ object Routes {
     fun editor(id: Long) = "editor/$id"
 }
 
-private val IosEaseOut = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
-
 private fun slideSpec(): FiniteAnimationSpec<IntOffset> =
-    tween(durationMillis = 360, easing = IosEaseOut)
+    tween(durationMillis = 420, easing = OreoMotion.EaseOut)
 
 private fun fadeSpec(): FiniteAnimationSpec<Float> =
-    tween(durationMillis = 160, easing = IosEaseOut)
+    tween(durationMillis = 180, easing = OreoMotion.EaseOut)
 
 @Composable
 fun AppNav() {

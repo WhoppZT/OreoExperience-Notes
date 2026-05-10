@@ -2,9 +2,8 @@
 
 package com.oreoexperience.notes.ui.onboarding
 
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,6 +45,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.oreoexperience.notes.ui.theme.OreoPalette
+import com.oreoexperience.notes.ui.theme.OreoMotion
 import kotlinx.coroutines.launch
 
 /**
@@ -116,10 +116,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                     val active = i == pagerState.currentPage
                     val w by animateFloatAsState(
                         targetValue = if (active) 22f else 6f,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioLowBouncy,
-                            stiffness = Spring.StiffnessMediumLow,
-                        ),
+                        animationSpec = tween(260, easing = OreoMotion.EaseOut),
                         label = "indicatorW",
                     )
                     Box(
@@ -161,7 +158,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                         containerColor = OreoPalette.Accent,
                         contentColor = Color.White,
                     ),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(18.dp),
                 ) {
                     Text(
                         text = if (pagerState.currentPage == pages.lastIndex) "Comenzar"
