@@ -1,9 +1,10 @@
 package com.oreoexperience.notes.ui.auth
 
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,9 +49,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.oreoexperience.notes.BuildConfig
+import com.oreoexperience.notes.ui.theme.OreoMotion
 import com.oreoexperience.notes.ui.theme.OreoPalette
-
-private val AccessEase = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
 
 @Composable
 fun AccessScreen(onUnlocked: (String) -> Unit) {
@@ -59,14 +59,16 @@ fun AccessScreen(onUnlocked: (String) -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var entered by remember { mutableStateOf(false) }
 
+    // Entrada del card: alpha controlada por tween (predecible) y
+    // scale por spring bouncy (rebote sutil al asentarse).
     val cardAlpha by animateFloatAsState(
         targetValue = if (entered) 1f else 0f,
-        animationSpec = tween(durationMillis = 280, easing = AccessEase),
+        animationSpec = tween(durationMillis = 320, easing = OreoMotion.EaseOut),
         label = "accessAlpha",
     )
     val cardScale by animateFloatAsState(
-        targetValue = if (entered) 1f else 0.96f,
-        animationSpec = tween(durationMillis = 360, easing = AccessEase),
+        targetValue = if (entered) 1f else 0.92f,
+        animationSpec = OreoMotion.SpringBouncy(),
         label = "accessScale",
     )
 
@@ -105,7 +107,7 @@ fun AccessScreen(onUnlocked: (String) -> Unit) {
                 .alpha(cardAlpha)
                 .background(
                     color = OreoPalette.SurfaceCard,
-                    shape = RoundedCornerShape(30.dp),
+                    shape = RoundedCornerShape(28.dp),
                 )
                 .padding(22.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -174,13 +176,23 @@ fun AccessScreen(onUnlocked: (String) -> Unit) {
                 )
             }
             Spacer(Modifier.height(18.dp))
+            // Botón con press feedback bouncy estilo iOS.
+            val unlockInteraction = remember { MutableInteractionSource() }
+            val unlockPressed by unlockInteraction.collectIsPressedAsState()
+            val unlockScale by animateFloatAsState(
+                targetValue = if (unlockPressed) 0.96f else 1f,
+                animationSpec = OreoMotion.SpringBouncy(),
+                label = "unlockPressScale",
+            )
             Button(
                 onClick = { tryUnlock() },
                 enabled = email.isNotBlank() && code.isNotBlank(),
+                interactionSource = unlockInteraction,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(18.dp),
+                    .height(52.dp)
+                    .scale(unlockScale),
+                shape = RoundedCornerShape(20.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = OreoPalette.Accent,
                     contentColor = Color.White,
@@ -223,6 +235,7 @@ private fun AccessField(
         visualTransformation = visualTransformation,
         keyboardOptions = keyboardOptions,
         keyboardActions = keyboardActions,
+        shape = RoundedCornerShape(16.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedTextColor = OreoPalette.OnSurface,
             unfocusedTextColor = OreoPalette.OnSurface,

@@ -14,6 +14,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.scale
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -643,13 +645,59 @@ private fun ToolbarButton(
     onClick: () -> Unit,
     tintActive: Color = OreoPalette.Accent,
 ) {
-    IconButton(onClick = onClick, modifier = Modifier.size(38.dp)) {
-        Icon(
-            imageVector = icon,
-            contentDescription = description,
-            tint = if (active) tintActive else OreoPalette.OnSurfaceMuted,
-            modifier = Modifier.size(20.dp),
+    // El botón del toolbar muestra una píldora redondeada cuando está
+    // activo (estilo iOS Notes). Animamos color de fondo + tint con
+    // springs para que el toggle se sienta vivo.
+    val bgColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (active) tintActive.copy(alpha = 0.20f) else Color.Transparent,
+        animationSpec = androidx.compose.animation.core.tween(
+            durationMillis = 220,
+            easing = OreoMotion.EaseOut,
+        ),
+        label = "toolbarBtnBg",
+    )
+    val tint by androidx.compose.animation.animateColorAsState(
+        targetValue = if (active) tintActive else OreoPalette.OnSurfaceMuted,
+        animationSpec = androidx.compose.animation.core.tween(
+            durationMillis = 220,
+            easing = OreoMotion.EaseOut,
+        ),
+        label = "toolbarBtnTint",
+    )
+    val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (pressed) 0.88f else 1f,
+        animationSpec = OreoMotion.SpringBouncy(),
+        label = "toolbarBtnScale",
+    )
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 2.dp)
+            .size(38.dp)
+            .scale(scale),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .background(
+                    color = bgColor,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                ),
         )
+        IconButton(
+            onClick = onClick,
+            interactionSource = interaction,
+            modifier = Modifier.size(38.dp),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = description,
+                tint = tint,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }
 

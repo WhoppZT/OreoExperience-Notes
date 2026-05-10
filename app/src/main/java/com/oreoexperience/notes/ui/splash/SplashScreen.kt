@@ -66,14 +66,16 @@ fun SplashScreen(onFinished: () -> Unit) {
     )
 
     var entered by remember { mutableStateOf(false) }
+    // Spring bouncy: el ícono entra con un "pop" elástico, no con
+    // un tween rígido — sensación tipo iOS al desbloquear el iPhone.
     val iconScale by animateFloatAsState(
-        targetValue = if (entered) 1f else 0.78f,
-        animationSpec = tween(620, easing = OreoMotion.EaseOut),
+        targetValue = if (entered) 1f else 0.62f,
+        animationSpec = OreoMotion.SpringHero(),
         label = "iconScale",
     )
     val iconAlpha by animateFloatAsState(
         targetValue = if (entered) 1f else 0f,
-        animationSpec = tween(540, easing = EaseOutCubic),
+        animationSpec = tween(560, easing = EaseOutCubic),
         label = "iconAlpha",
     )
 
@@ -131,7 +133,7 @@ fun SplashScreen(onFinished: () -> Unit) {
                 // Cuadrado del ícono con gradient violeta.
                 Box(
                     modifier = Modifier
-                        .size(96.dp)
+                        .size(104.dp)
                         .scale(iconScale)
                         .alpha(iconAlpha)
                         .background(
@@ -142,7 +144,7 @@ fun SplashScreen(onFinished: () -> Unit) {
                                     OreoPalette.AccentSub,
                                 ),
                             ),
-                            shape = RoundedCornerShape(22.dp),
+                            shape = RoundedCornerShape(28.dp),
                         ),
                     contentAlignment = Alignment.Center,
                 ) {

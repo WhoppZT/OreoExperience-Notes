@@ -6,6 +6,8 @@
 package com.oreoexperience.notes.ui.home
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -36,13 +38,14 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Share
-import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
@@ -135,16 +138,32 @@ fun HomeScreen(
     val grouped = remember(unpinned) { groupByMonth(unpinned) }
     var pinnedExpanded by remember { mutableStateOf(true) }
 
+    // FAB con press feedback bouncy: al apretar, baja a 0.92 con un
+    // pequeño giro y vuelve con un overshoot, igual que un botón iOS.
+    val fabInteraction = remember { MutableInteractionSource() }
+    val fabPressed by fabInteraction.collectIsPressedAsState()
+    val fabScale by animateFloatAsState(
+        targetValue = if (fabPressed) 0.92f else 1f,
+        animationSpec = OreoMotion.SpringBouncy(),
+        label = "fabPressScale",
+    )
+
     Scaffold(
         containerColor = OreoPalette.Bg0,
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onNew,
+                interactionSource = fabInteraction,
                 shape = CircleShape,
                 containerColor = OreoPalette.Accent,
                 contentColor = Color.White,
+                modifier = Modifier.scale(fabScale),
             ) {
-                Icon(Icons.Outlined.Edit, contentDescription = "Nueva nota")
+                Icon(
+                    imageVector = Icons.Outlined.Edit,
+                    contentDescription = "Nueva nota",
+                    modifier = Modifier.size(22.dp),
+                )
             }
         },
         bottomBar = {
@@ -396,7 +415,7 @@ private fun CollapsibleHeader(
 ) {
     val rotation by animateFloatAsState(
         targetValue = if (expanded) 0f else -90f,
-        animationSpec = tween(240, easing = OreoMotion.EaseOut),
+        animationSpec = OreoMotion.SpringCrisp(),
         label = "chevronRotation",
     )
     Row(
@@ -417,11 +436,13 @@ private fun CollapsibleHeader(
             fontWeight = FontWeight.Bold,
             modifier = Modifier.weight(1f),
         )
-        Text(
-            text = "˅",
-            color = OreoPalette.Accent,
-            fontSize = 20.sp,
-            modifier = Modifier.rotate(rotation),
+        Icon(
+            imageVector = Icons.Outlined.ExpandMore,
+            contentDescription = if (expanded) "Colapsar" else "Expandir",
+            tint = OreoPalette.Accent,
+            modifier = Modifier
+                .size(22.dp)
+                .rotate(rotation),
         )
     }
 }
@@ -436,9 +457,16 @@ private fun GroupedCard(
     Column(
         modifier = Modifier
             .padding(horizontal = 12.dp)
+            .clip(RoundedCornerShape(22.dp))
             .background(
                 color = OreoPalette.SurfaceCard,
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(22.dp),
+            )
+            .animateContentSize(
+                animationSpec = tween(
+                    durationMillis = 280,
+                    easing = LinearOutSlowInEasing,
+                ),
             ),
     ) {
         items.forEachIndexed { index, d ->
@@ -485,8 +513,8 @@ private fun NoteRow(
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val pressScale by animateFloatAsState(
-        targetValue = if (pressed) 0.97f else 1f,
-        animationSpec = tween(120, easing = OreoMotion.EaseOut),
+        targetValue = if (pressed) 0.96f else 1f,
+        animationSpec = OreoMotion.SpringBouncy(),
         label = "rowPressScale",
     )
 
@@ -548,8 +576,8 @@ private fun NoteRow(
             Spacer(Modifier.size(10.dp))
             Box(
                 modifier = Modifier
-                    .size(52.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .size(54.dp)
+                    .clip(RoundedCornerShape(14.dp))
                     .background(OreoPalette.SurfaceCardHi),
             ) {
                 AsyncImage(

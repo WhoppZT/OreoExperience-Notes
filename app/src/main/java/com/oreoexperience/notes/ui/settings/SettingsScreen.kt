@@ -6,7 +6,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts.CreateDocument
 import androidx.activity.result.contract.ActivityResultContracts.OpenDocument
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -27,15 +26,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBackIosNew
-import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.Brightness6
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Save
-import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
@@ -319,7 +318,7 @@ private fun SectionCard(content: @Composable () -> Unit) {
             .padding(horizontal = 14.dp)
             .background(
                 color = OreoPalette.SurfaceCard,
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(22.dp),
             ),
     ) { content() }
 }
@@ -392,8 +391,8 @@ private fun ChevronRow(
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val pressScale by animateFloatAsState(
-        targetValue = if (pressed) 0.98f else 1f,
-        animationSpec = tween(120, easing = OreoMotion.EaseOut),
+        targetValue = if (pressed) 0.97f else 1f,
+        animationSpec = OreoMotion.SpringBouncy(),
         label = "settingsRowScale",
     )
     Row(
@@ -432,7 +431,12 @@ private fun ChevronRow(
             )
             Spacer(Modifier.size(4.dp))
         }
-        Text("›", color = OreoPalette.OnSurfaceFaint, fontSize = 22.sp)
+        Icon(
+            imageVector = Icons.Outlined.ChevronRight,
+            contentDescription = null,
+            tint = OreoPalette.OnSurfaceFaint,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
@@ -460,17 +464,28 @@ private fun InfoRow(
 
 @Composable
 private fun IconBubble(icon: ImageVector, tint: Color) {
+    // Círculo "chiclet" tipo iOS Settings: bubble sólida del color
+    // del item, con el icono blanco encima. Más legible que el bubble
+    // semi-transparente y refuerza la jerarquía visual.
     Box(
         modifier = Modifier
-            .size(28.dp)
-            .background(color = tint.copy(alpha = 0.18f), shape = CircleShape),
+            .size(30.dp)
+            .background(
+                brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                    colors = listOf(
+                        tint.copy(alpha = 0.95f),
+                        tint.copy(alpha = 0.75f),
+                    ),
+                ),
+                shape = RoundedCornerShape(8.dp),
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = tint,
-            modifier = Modifier.size(16.dp),
+            tint = Color.White,
+            modifier = Modifier.size(18.dp),
         )
     }
 }
@@ -502,7 +517,7 @@ private fun ThemePicker(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(20.dp)
+                                .size(22.dp)
                                 .background(
                                     color = if (mode == current) OreoPalette.Accent
                                     else Color.Transparent,
@@ -511,11 +526,16 @@ private fun ThemePicker(
                             contentAlignment = Alignment.Center,
                         ) {
                             if (mode == current) {
-                                Text("✓", color = Color.White, fontSize = 12.sp)
+                                Icon(
+                                    imageVector = Icons.Outlined.Check,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp),
+                                )
                             } else {
                                 Box(
                                     modifier = Modifier
-                                        .size(18.dp)
+                                        .size(20.dp)
                                         .background(
                                             color = Color.Transparent,
                                             shape = CircleShape,

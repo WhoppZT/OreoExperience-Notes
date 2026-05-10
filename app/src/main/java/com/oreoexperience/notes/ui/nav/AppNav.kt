@@ -40,11 +40,9 @@ object Routes {
     fun editor(id: Long) = "editor/$id"
 }
 
-private fun slideSpec(): FiniteAnimationSpec<IntOffset> =
-    tween(durationMillis = 420, easing = OreoMotion.EaseOut)
-
+private fun slideSpec(): FiniteAnimationSpec<IntOffset> = OreoMotion.SpringNav()
 private fun fadeSpec(): FiniteAnimationSpec<Float> =
-    tween(durationMillis = 180, easing = OreoMotion.EaseOut)
+    tween(durationMillis = 220, easing = OreoMotion.EaseEmphasized)
 
 @Composable
 fun AppNav() {
@@ -61,6 +59,10 @@ fun AppNav() {
             .fillMaxSize()
             .background(OreoPalette.Bg0),
     ) {
+        // Push transitions usan slide + fade. La pantalla nueva entra
+        // desde la derecha empujando a la actual; al volver, se invierte.
+        // Las curvas son spring para que se sientan vivas en lugar de
+        // un tween rígido.
         NavHost(
             navController = nav,
             startDestination = Routes.Home,
@@ -73,13 +75,13 @@ fun AppNav() {
             exitTransition = {
                 slideOutHorizontally(
                     animationSpec = slideSpec(),
-                    targetOffsetX = { -it / 3 },
+                    targetOffsetX = { -it / 4 },
                 ) + fadeOut(animationSpec = fadeSpec())
             },
             popEnterTransition = {
                 slideInHorizontally(
                     animationSpec = slideSpec(),
-                    initialOffsetX = { -it / 3 },
+                    initialOffsetX = { -it / 4 },
                 ) + fadeIn(animationSpec = fadeSpec())
             },
             popExitTransition = {
@@ -142,3 +144,4 @@ fun AppNav() {
         }
     }
 }
+

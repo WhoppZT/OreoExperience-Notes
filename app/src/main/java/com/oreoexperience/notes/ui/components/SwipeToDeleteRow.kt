@@ -60,7 +60,7 @@ fun SwipeToDeleteRow(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(22.dp))
                     .background(OreoPalette.DangerFill)
                     .padding(end = 24.dp),
                 contentAlignment = Alignment.CenterEnd,
