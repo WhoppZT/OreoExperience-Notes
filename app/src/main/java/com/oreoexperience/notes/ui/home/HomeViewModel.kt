@@ -4,12 +4,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.oreoexperience.notes.data.Discurso
 import com.oreoexperience.notes.data.DiscursoRepository
+import com.oreoexperience.notes.data.MediaStorage
+import com.oreoexperience.notes.data.NoteBlockSerializer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 data class HomeUiState(
     val items: List<Discurso> = emptyList(),
@@ -18,6 +21,7 @@ data class HomeUiState(
 
 class HomeViewModel(
     private val repository: DiscursoRepository,
+    private val mediaStorage: MediaStorage,
 ) : ViewModel() {
 
     private val query = MutableStateFlow("")
@@ -40,5 +44,20 @@ class HomeViewModel(
 
     fun setQuery(q: String) {
         query.value = q
+    }
+
+    /**
+     * Elimina la nota y cualquier archivo de medios referenciado en su
+     * cuerpo. Hacemos esto como tarea fire-and-forget — el flow
+     * de [observeAll] hace el refresh automáticamente.
+     */
+    fun deleteNote(d: Discurso) {
+        viewModelScope.launch {
+            val blocks = NoteBlockSerializer.decode(d.notes)
+            NoteBlockSerializer.mediaFiles(blocks).forEach { name ->
+                mediaStorage.deleteIfExists(name)
+            }
+            repository.delete(d)
+        }
     }
 }

@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -35,7 +34,6 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
@@ -56,6 +55,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.oreoexperience.notes.data.Discurso
 import com.oreoexperience.notes.ui.LocalAppContainer
+import com.oreoexperience.notes.ui.components.SwipeToDeleteRow
 import com.oreoexperience.notes.ui.theme.OreoPalette
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -63,15 +63,16 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Pantalla principal estilo **iOS Notes**:
+ * Pantalla principal estilo **iOS Notes** con identidad
+ * **OreoExperience Aurora**:
  *
  *   - Fondo negro puro.
- *   - Large title "Notas" arriba (no animado por ahora — sin
- *     CollapsingTopAppBar para mantener simple la implementación).
+ *   - Large title "OreoExperience · Notas" arriba.
  *   - Buscador rounded debajo del título.
  *   - Lista plana agrupada por mes ("Mayo 2026", "Abril 2026", etc.).
  *   - Cada fila: título (bold blanco) + preview (gris muted) + fecha.
- *   - FAB amarillo redondo abajo a la derecha con ícono de lápiz.
+ *   - **Swipe-to-delete**: deslizá una fila a la izquierda para borrarla.
+ *   - FAB violeta redondo abajo a la derecha con ícono de lápiz.
  *   - Footer "X notas" centrado abajo.
  */
 @Composable
@@ -82,7 +83,7 @@ fun HomeScreen(
     val container = LocalAppContainer.current
     val vm: HomeViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { HomeViewModel(container.repository) }
+            initializer { HomeViewModel(container.repository, container.mediaStorage) }
         }
     )
     val state by vm.state.collectAsStateWithLifecycle()
@@ -96,13 +97,12 @@ fun HomeScreen(
                 onClick = onNew,
                 shape = CircleShape,
                 containerColor = OreoPalette.Accent,
-                contentColor = Color.Black,
+                contentColor = Color.White,
             ) {
                 Icon(Icons.Outlined.Edit, contentDescription = "Nueva nota")
             }
         },
         bottomBar = {
-            // Footer iOS-like "X notas"
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -142,17 +142,33 @@ fun HomeScreen(
                 }
             }
 
-            // Large title
+            // Large title con gradient violeta sutil en "OreoExperience".
             item {
-                Text(
-                    text = "Notas",
-                    color = OreoPalette.OnSurface,
-                    fontSize = 34.sp,
-                    fontWeight = FontWeight.Bold,
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 18.dp, vertical = 4.dp),
-                )
+                ) {
+                    Text(
+                        text = "OreoExperience",
+                        style = LocalTextStyle.current.copy(
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    OreoPalette.AccentSub,
+                                    OreoPalette.Accent,
+                                ),
+                            ),
+                            fontSize = 30.sp,
+                            fontWeight = FontWeight.Bold,
+                        ),
+                    )
+                    Text(
+                        text = "Notas",
+                        color = OreoPalette.OnSurface,
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
             }
 
             // Search bar
@@ -176,7 +192,11 @@ fun HomeScreen(
                         SectionHeader(label)
                     }
                     item(key = "group-$label") {
-                        GroupedCard(items = items, onOpen = onOpen)
+                        GroupedCard(
+                            items = items,
+                            onOpen = onOpen,
+                            onDelete = vm::deleteNote,
+                        )
                     }
                 }
             }
@@ -247,7 +267,11 @@ private fun SectionHeader(label: String) {
 }
 
 @Composable
-private fun GroupedCard(items: List<Discurso>, onOpen: (Long) -> Unit) {
+private fun GroupedCard(
+    items: List<Discurso>,
+    onOpen: (Long) -> Unit,
+    onDelete: (Discurso) -> Unit,
+) {
     Column(
         modifier = Modifier
             .padding(horizontal = 12.dp)
@@ -257,7 +281,13 @@ private fun GroupedCard(items: List<Discurso>, onOpen: (Long) -> Unit) {
             ),
     ) {
         items.forEachIndexed { index, d ->
-            NoteRow(d = d, onClick = { onOpen(d.id) })
+            // Cada fila se envuelve en SwipeToDeleteRow para soportar
+            // el gesto iOS de borrar deslizando.
+            SwipeToDeleteRow(onDelete = { onDelete(d) }) {
+                Box(modifier = Modifier.background(OreoPalette.SurfaceCard)) {
+                    NoteRow(d = d, onClick = { onOpen(d.id) })
+                }
+            }
             if (index < items.lastIndex) {
                 Box(
                     modifier = Modifier
@@ -356,11 +386,6 @@ private fun EmptyState() {
 private fun pluralize(count: Int, singular: String, plural: String): String =
     if (count == 1) "1 $singular" else "$count $plural"
 
-/**
- * Agrupa las notas por mes/año con label en español ("Mayo 2026", "Abril
- * 2026"). El año actual se omite si todas las notas son del año en curso
- * (replicando el comportamiento de iOS).
- */
 private fun groupByMonth(items: List<Discurso>): List<Pair<String, List<Discurso>>> {
     if (items.isEmpty()) return emptyList()
     val sdfFull = SimpleDateFormat("MMMM yyyy", Locale("es"))
@@ -382,6 +407,8 @@ private fun buildPreview(d: Discurso): String {
     val raw = d.notes.ifBlank { "" }
     return raw
         .replace("\n", " ")
+        // Quitar marcadores de media para el preview.
+        .replace(Regex("<!--media:[^>]+-->"), "")
         .replace(Regex("[*_`#>~\\[\\]]"), "")
         .replace(Regex("<[^>]+>"), "")
         .trim()

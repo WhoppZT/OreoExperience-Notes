@@ -5,7 +5,11 @@
 
 package com.oreoexperience.notes.ui.editor
 
+import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -14,6 +18,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,7 +27,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -43,8 +47,10 @@ import androidx.compose.material.icons.outlined.FormatItalic
 import androidx.compose.material.icons.outlined.FormatListNumbered
 import androidx.compose.material.icons.outlined.FormatStrikethrough
 import androidx.compose.material.icons.outlined.FormatUnderlined
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Title
+import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -55,6 +61,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,9 +70,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -81,8 +90,10 @@ import com.mohamedrejeb.richeditor.model.RichTextState
 import com.mohamedrejeb.richeditor.model.rememberRichTextState
 import com.mohamedrejeb.richeditor.ui.material3.RichTextEditor
 import com.mohamedrejeb.richeditor.ui.material3.RichTextEditorDefaults
+import com.oreoexperience.notes.data.NoteBlock
 import com.oreoexperience.notes.ui.LocalAppContainer
 import com.oreoexperience.notes.ui.components.BottomTimerBar
+import com.oreoexperience.notes.ui.components.MediaPreview
 import com.oreoexperience.notes.ui.theme.OreoPalette
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
@@ -91,18 +102,23 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+private const val SWIPE_BACK_THRESHOLD_DP = 80f
+private const val SWIPE_BACK_EDGE_DP = 24f
+
 /**
- * Editor de nota estilo **iOS Notes** (modo oscuro): fondo negro,
- * título y cuerpo a pantalla completa, top bar con botón "Notas"
- * (volver) a la izquierda y "Listo" a la derecha en amarillo iOS.
+ * Editor estilo iOS Notes con identidad **OreoExperience Aurora**.
  *
- * Comportamiento:
- *   - Auto-guardado al volver atrás (no hay botón "guardar" — el flujo
- *     iOS guarda solo al cerrar la nota).
- *   - El menú "⋯" expone funciones extra: "Establecer cronómetro" y
- *     "Eliminar nota".
- *   - Si la nota tiene `targetDurationSec > 0`, aparece la barra
- *     [BottomTimerBar] anclada arriba del teclado / nav bar.
+ * Modelo basado en bloques: la nota es una columna de bloques de
+ * texto y media intercalados. Cada bloque de texto tiene su propio
+ * RichTextEditor; los bloques de media se renderizan inline con
+ * preview a pantalla completa.
+ *
+ * Toolbar inferior: formato (B/I/U/S, encabezado, listas) + insertar
+ * imagen / video desde el sistema. La inserción se hace en la posición
+ * exacta del cursor.
+ *
+ * Swipe-back: arrastrar desde el borde izquierdo (>= 80 dp) dispara el
+ * back, igual al gesto pull-to-back de iOS.
  */
 @Composable
 fun EditorScreen(
@@ -111,9 +127,10 @@ fun EditorScreen(
     onSaved: (Long) -> Unit,
 ) {
     val container = LocalAppContainer.current
+    val mediaStorage = container.mediaStorage
     val vm: EditorViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { EditorViewModel(container.repository) }
+            initializer { EditorViewModel(container.repository, mediaStorage) }
         }
     )
     LaunchedEffect(discursoId) { vm.load(discursoId) }
@@ -123,18 +140,38 @@ fun EditorScreen(
     var showTimerDialog by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
 
-    // Editor de texto rich (WYSIWYG)
-    val richState = rememberRichTextState()
-    LaunchedEffect(state.loaded, state.id) {
-        if (state.loaded && richState.toMarkdown() != state.body) {
-            richState.setMarkdown(state.body)
+    // Track del bloque de texto enfocado para insertar media después.
+    var focusedTextBlockId by remember { mutableStateOf<String?>(null) }
+    var focusedCursorOffset by remember { mutableStateOf(-1) }
+
+    // Pickers de media.
+    val imagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch {
+                val name = mediaStorage.importUri(uri, fallbackExt = "jpg") ?: return@launch
+                vm.insertMediaAfter(
+                    afterTextBlockId = focusedTextBlockId,
+                    splitOffset = focusedCursorOffset,
+                    media = NoteBlock.Image(fileName = name),
+                )
+            }
         }
     }
-    LaunchedEffect(richState) {
-        snapshotFlow { richState.annotatedString }
-            .drop(1)
-            .distinctUntilChanged()
-            .collect { vm.setBody(richState.toMarkdown()) }
+    val videoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch {
+                val name = mediaStorage.importUri(uri, fallbackExt = "mp4") ?: return@launch
+                vm.insertMediaAfter(
+                    afterTextBlockId = focusedTextBlockId,
+                    splitOffset = focusedCursorOffset,
+                    media = NoteBlock.Video(fileName = name),
+                )
+            }
+        }
     }
 
     suspend fun saveAndBack() {
@@ -145,10 +182,38 @@ fun EditorScreen(
         scope.launch { saveAndBack() }
     }
 
+    // Track activo para que el botón "B/I/U..." opere sobre el bloque
+    // enfocado.
+    val activeStateRef = remember { mutableStateOf<RichTextState?>(null) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(OreoPalette.Bg0),
+            .background(OreoPalette.Bg0)
+            // Swipe-back desde el borde izquierdo (gesto iOS).
+            .pointerInput(Unit) {
+                val edgePx = SWIPE_BACK_EDGE_DP.dp.toPx()
+                val thresholdPx = SWIPE_BACK_THRESHOLD_DP.dp.toPx()
+                var startX = 0f
+                var totalDelta = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { offset ->
+                        startX = offset.x
+                        totalDelta = 0f
+                    },
+                    onHorizontalDrag = { _, dragAmount ->
+                        if (startX <= edgePx) {
+                            totalDelta += dragAmount
+                        }
+                    },
+                    onDragEnd = {
+                        if (startX <= edgePx && totalDelta >= thresholdPx) {
+                            scope.launch { saveAndBack() }
+                        }
+                    },
+                    onDragCancel = { /* nothing */ },
+                )
+            },
     ) {
         Column(
             modifier = Modifier
@@ -231,7 +296,7 @@ fun EditorScreen(
                 }
             }
 
-            // Cuerpo scrolleable
+            // Cuerpo scrolleable: título + bloques.
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -277,38 +342,37 @@ fun EditorScreen(
                 )
                 Spacer(Modifier.height(10.dp))
 
-                RichTextEditor(
-                    state = richState,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 360.dp),
-                    textStyle = LocalTextStyle.current.copy(
-                        color = OreoPalette.OnSurface,
-                        fontSize = 17.sp,
-                        lineHeight = 24.sp,
-                    ),
-                    colors = RichTextEditorDefaults.richTextEditorColors(
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        disabledIndicatorColor = Color.Transparent,
-                        errorIndicatorColor = Color.Transparent,
-                        cursorColor = OreoPalette.Accent,
-                        textColor = OreoPalette.OnSurface,
-                        containerColor = Color.Transparent,
-                    ),
-                    placeholder = {
-                        Text(
-                            text = "Empezá a escribir…",
-                            color = OreoPalette.OnSurfaceFaint,
-                            fontSize = 17.sp,
+                // Render de cada bloque
+                state.blocks.forEach { block ->
+                    when (block) {
+                        is NoteBlock.Text -> TextBlockEditor(
+                            block = block,
+                            initialMarkdown = block.markdown,
+                            onMarkdownChange = { md -> vm.updateTextBlock(block.id, md) },
+                            onFocused = { rts, cursor ->
+                                focusedTextBlockId = block.id
+                                focusedCursorOffset = cursor
+                                activeStateRef.value = rts
+                            },
                         )
-                    },
-                )
+                        is NoteBlock.Image -> MediaPreview(
+                            fileName = block.fileName,
+                            isVideo = false,
+                            storage = mediaStorage,
+                            onDelete = { vm.removeBlock(block.id) },
+                        )
+                        is NoteBlock.Video -> MediaPreview(
+                            fileName = block.fileName,
+                            isVideo = true,
+                            storage = mediaStorage,
+                            onDelete = { vm.removeBlock(block.id) },
+                        )
+                    }
+                }
                 Spacer(Modifier.height(120.dp))
             }
 
-            // Cronómetro inferior. Slide-up con spring low-bouncy para
-            // que aparezca con un pequeño rebote al asentarse.
+            // Cronómetro inferior con slide-up + spring.
             AnimatedVisibility(
                 visible = state.loaded && state.targetDurationSec > 0,
                 enter = slideInVertically(
@@ -332,8 +396,24 @@ fun EditorScreen(
                 )
             }
 
-            // Toolbar de formato
-            FormatToolbar(richState)
+            // Toolbar de formato + media
+            FormatToolbar(
+                activeState = activeStateRef.value,
+                onPickImage = {
+                    imagePicker.launch(
+                        PickVisualMediaRequest(
+                            ActivityResultContracts.PickVisualMedia.ImageOnly
+                        ),
+                    )
+                },
+                onPickVideo = {
+                    videoPicker.launch(
+                        PickVisualMediaRequest(
+                            ActivityResultContracts.PickVisualMedia.VideoOnly
+                        ),
+                    )
+                },
+            )
         }
 
         if (showTimerDialog) {
@@ -376,8 +456,78 @@ fun EditorScreen(
     }
 }
 
+/**
+ * Editor de bloque de texto: un RichTextEditor que se sincroniza con
+ * el ViewModel. Cada bloque tiene su propio state para evitar que se
+ * peleen. El callback onFocused se dispara cuando el bloque toma el
+ * foco — usamos eso para que el botón "Insertar imagen" sepa dónde
+ * cortar.
+ */
 @Composable
-private fun FormatToolbar(state: RichTextState) {
+private fun TextBlockEditor(
+    block: NoteBlock.Text,
+    initialMarkdown: String,
+    onMarkdownChange: (String) -> Unit,
+    onFocused: (RichTextState, Int) -> Unit,
+) {
+    val richState = rememberRichTextState()
+    LaunchedEffect(block.id) {
+        if (richState.toMarkdown() != initialMarkdown) {
+            richState.setMarkdown(initialMarkdown)
+        }
+    }
+    LaunchedEffect(richState) {
+        snapshotFlow { richState.annotatedString }
+            .drop(1)
+            .distinctUntilChanged()
+            .collect { onMarkdownChange(richState.toMarkdown()) }
+    }
+    // Re-emitir foco cuando cambia el cursor para que el insertor de
+    // media tenga la posición actualizada.
+    val cursor by remember(richState) {
+        derivedStateOf { richState.selection.start }
+    }
+    LaunchedEffect(cursor) {
+        onFocused(richState, cursor)
+    }
+
+    RichTextEditor(
+        state = richState,
+        modifier = Modifier
+            .fillMaxWidth()
+            .onFocusChanged { fs ->
+                if (fs.isFocused) onFocused(richState, richState.selection.start)
+            },
+        textStyle = LocalTextStyle.current.copy(
+            color = OreoPalette.OnSurface,
+            fontSize = 17.sp,
+            lineHeight = 24.sp,
+        ),
+        colors = RichTextEditorDefaults.richTextEditorColors(
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+            disabledIndicatorColor = Color.Transparent,
+            errorIndicatorColor = Color.Transparent,
+            cursorColor = OreoPalette.Accent,
+            textColor = OreoPalette.OnSurface,
+            containerColor = Color.Transparent,
+        ),
+        placeholder = {
+            Text(
+                text = "Empezá a escribir…",
+                color = OreoPalette.OnSurfaceFaint,
+                fontSize = 17.sp,
+            )
+        },
+    )
+}
+
+@Composable
+private fun FormatToolbar(
+    activeState: RichTextState?,
+    onPickImage: () -> Unit,
+    onPickVideo: () -> Unit,
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -388,54 +538,72 @@ private fun FormatToolbar(state: RichTextState) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(horizontal = 6.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            horizontalArrangement = Arrangement.spacedBy(0.dp),
         ) {
+            // Insertar imagen / video — siempre disponibles.
+            ToolbarButton(
+                icon = Icons.Outlined.Image,
+                description = "Insertar imagen",
+                active = false,
+                tintActive = OreoPalette.AccentSub,
+                onClick = onPickImage,
+            )
+            ToolbarButton(
+                icon = Icons.Outlined.Videocam,
+                description = "Insertar video",
+                active = false,
+                tintActive = OreoPalette.AccentSub,
+                onClick = onPickVideo,
+            )
+            VerticalDivider()
             ToolbarButton(
                 icon = Icons.Outlined.FormatBold,
                 description = "Negrita",
-                active = state.currentSpanStyle.fontWeight == FontWeight.Bold,
-                onClick = { state.toggleSpanStyle(SpanStyle(fontWeight = FontWeight.Bold)) },
+                active = activeState?.currentSpanStyle?.fontWeight == FontWeight.Bold,
+                onClick = { activeState?.toggleSpanStyle(SpanStyle(fontWeight = FontWeight.Bold)) },
             )
             ToolbarButton(
                 icon = Icons.Outlined.FormatItalic,
                 description = "Cursiva",
-                active = state.currentSpanStyle.fontStyle == FontStyle.Italic,
-                onClick = { state.toggleSpanStyle(SpanStyle(fontStyle = FontStyle.Italic)) },
+                active = activeState?.currentSpanStyle?.fontStyle == FontStyle.Italic,
+                onClick = { activeState?.toggleSpanStyle(SpanStyle(fontStyle = FontStyle.Italic)) },
             )
             ToolbarButton(
                 icon = Icons.Outlined.FormatUnderlined,
                 description = "Subrayado",
-                active = state.currentSpanStyle.textDecoration?.contains(TextDecoration.Underline) == true,
-                onClick = { state.toggleSpanStyle(SpanStyle(textDecoration = TextDecoration.Underline)) },
+                active = activeState?.currentSpanStyle?.textDecoration?.contains(TextDecoration.Underline) == true,
+                onClick = { activeState?.toggleSpanStyle(SpanStyle(textDecoration = TextDecoration.Underline)) },
             )
             ToolbarButton(
                 icon = Icons.Outlined.FormatStrikethrough,
                 description = "Tachado",
-                active = state.currentSpanStyle.textDecoration?.contains(TextDecoration.LineThrough) == true,
-                onClick = { state.toggleSpanStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) },
+                active = activeState?.currentSpanStyle?.textDecoration?.contains(TextDecoration.LineThrough) == true,
+                onClick = { activeState?.toggleSpanStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) },
             )
             VerticalDivider()
             ToolbarButton(
                 icon = Icons.Outlined.Title,
                 description = "Encabezado",
-                active = state.currentSpanStyle.fontSize == 22.sp,
+                active = activeState?.currentSpanStyle?.fontSize == 22.sp,
                 onClick = {
-                    state.toggleSpanStyle(SpanStyle(fontSize = 22.sp, fontWeight = FontWeight.Bold))
+                    activeState?.toggleSpanStyle(
+                        SpanStyle(fontSize = 22.sp, fontWeight = FontWeight.Bold),
+                    )
                 },
             )
             ToolbarButton(
                 icon = Icons.AutoMirrored.Outlined.FormatListBulleted,
                 description = "Lista",
-                active = state.isUnorderedList,
-                onClick = { state.toggleUnorderedList() },
+                active = activeState?.isUnorderedList == true,
+                onClick = { activeState?.toggleUnorderedList() },
             )
             ToolbarButton(
                 icon = Icons.Outlined.FormatListNumbered,
                 description = "Lista numerada",
-                active = state.isOrderedList,
-                onClick = { state.toggleOrderedList() },
+                active = activeState?.isOrderedList == true,
+                onClick = { activeState?.toggleOrderedList() },
             )
             Spacer(Modifier.weight(1f))
         }
@@ -448,12 +616,13 @@ private fun ToolbarButton(
     description: String,
     active: Boolean,
     onClick: () -> Unit,
+    tintActive: Color = OreoPalette.Accent,
 ) {
-    IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
+    IconButton(onClick = onClick, modifier = Modifier.size(38.dp)) {
         Icon(
             imageVector = icon,
             contentDescription = description,
-            tint = if (active) OreoPalette.Accent else OreoPalette.OnSurfaceMuted,
+            tint = if (active) tintActive else OreoPalette.OnSurfaceMuted,
             modifier = Modifier.size(20.dp),
         )
     }
@@ -463,7 +632,7 @@ private fun ToolbarButton(
 private fun VerticalDivider() {
     Box(
         modifier = Modifier
-            .padding(horizontal = 6.dp)
+            .padding(horizontal = 4.dp)
             .height(20.dp)
             .width(1.dp)
             .background(OreoPalette.Outline),

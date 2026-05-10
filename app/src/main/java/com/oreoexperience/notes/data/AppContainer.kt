@@ -10,6 +10,8 @@ import android.content.Context
 interface AppContainer {
     val repository: DiscursoRepository
     val backupManager: BackupManager
+    val mediaStorage: MediaStorage
+    val userPreferences: UserPreferences
     val appContext: Context
 }
 
@@ -18,4 +20,6 @@ class AppContainerImpl(context: Context) : AppContainer {
     private val db: AppDatabase = AppDatabase.build(appContext)
     override val repository: DiscursoRepository = DiscursoRepository(db.discursoDao())
     override val backupManager: BackupManager = BackupManager(appContext, repository, db.discursoDao())
+    override val mediaStorage: MediaStorage = MediaStorage(appContext)
+    override val userPreferences: UserPreferences = UserPreferences(appContext)
 }

@@ -23,8 +23,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.oreoexperience.notes.ui.LocalAppContainer
 import com.oreoexperience.notes.ui.editor.EditorScreen
 import com.oreoexperience.notes.ui.home.HomeScreen
+import com.oreoexperience.notes.ui.onboarding.OnboardingScreen
 import com.oreoexperience.notes.ui.splash.SplashScreen
 import com.oreoexperience.notes.ui.theme.OreoPalette
 
@@ -64,7 +66,11 @@ private fun fadeSpec() = tween<Float>(durationMillis = 220)
 @Composable
 fun AppNav() {
     val nav = rememberNavController()
+    val container = LocalAppContainer.current
     var showSplash by remember { mutableStateOf(true) }
+    var showOnboarding by remember {
+        mutableStateOf(!container.userPreferences.onboardingDone)
+    }
 
     Box(
         modifier = Modifier
@@ -138,6 +144,18 @@ fun AppNav() {
 
         if (showSplash) {
             SplashScreen(onFinished = { showSplash = false })
+        }
+
+        // Onboarding queda por encima del splash sólo en el primer
+        // arranque. Una vez completado se persiste el flag para que
+        // no vuelva a aparecer.
+        if (!showSplash && showOnboarding) {
+            OnboardingScreen(
+                onFinish = {
+                    container.userPreferences.onboardingDone = true
+                    showOnboarding = false
+                },
+            )
         }
     }
 }

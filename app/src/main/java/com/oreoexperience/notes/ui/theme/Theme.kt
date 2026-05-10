@@ -14,22 +14,22 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 /**
- * Tema "iOS Notes Dark": fondo negro puro, texto blanco, acento amarillo
- * dorado. Forzamos siempre el esquema oscuro independientemente del
- * setting del sistema — la app no tiene tema claro por decisión del
- * diseño.
+ * Tema "iOS Notes Dark": fondo negro puro, texto blanco, acento
+ * **violeta Aurora**. Forzamos siempre el esquema oscuro
+ * independientemente del setting del sistema — la app no tiene tema
+ * claro por decisión del diseño.
  */
 private val IosDarkScheme = darkColorScheme(
     primary = OreoPalette.Accent,
-    onPrimary = Color.Black,
+    onPrimary = Color.White,
     primaryContainer = OreoPalette.SurfaceCardHi,
     onPrimaryContainer = OreoPalette.OnSurface,
 
     secondary = OreoPalette.Accent,
-    onSecondary = Color.Black,
+    onSecondary = Color.White,
 
-    tertiary = OreoPalette.Accent,
-    onTertiary = Color.Black,
+    tertiary = OreoPalette.AccentSub,
+    onTertiary = Color.White,
 
     background = OreoPalette.Bg0,
     onBackground = OreoPalette.OnSurface,
@@ -43,7 +43,7 @@ private val IosDarkScheme = darkColorScheme(
     outlineVariant = OreoPalette.OutlineFaint,
 
     error = OreoPalette.DangerFill,
-    onError = Color.Black,
+    onError = Color.White,
 )
 
 @Composable
@@ -66,10 +66,10 @@ fun OreoExperienceTheme(
         }
     }
 
-    // Selección de texto en amarillo iOS.
+    // Selección de texto en violeta Aurora.
     val iosSelectionColors = TextSelectionColors(
         handleColor = OreoPalette.Accent,
-        backgroundColor = OreoPalette.Accent.copy(alpha = 0.30f),
+        backgroundColor = OreoPalette.AccentSub.copy(alpha = 0.35f),
     )
 
     MaterialTheme(

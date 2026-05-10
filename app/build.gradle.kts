@@ -14,8 +14,8 @@ android {
         applicationId = "com.oreoexperience.notes"
         minSdk = 26
         targetSdk = 34
-        versionCode = 13
-        versionName = "0.7.1"
+        versionCode = 14
+        versionName = "0.8.0"
 
         vectorDrawables { useSupportLibrary = true }
     }
@@ -83,6 +83,9 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
 
     implementation(libs.richeditor.compose)
+
+    implementation(libs.coil.compose)
+    implementation(libs.coil.video)
 
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 }
