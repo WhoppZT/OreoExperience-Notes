@@ -4,35 +4,37 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.oreoexperience.notes.data.Discurso
 import com.oreoexperience.notes.data.DiscursoRepository
-import com.oreoexperience.notes.data.Punto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * Estado del editor.
+ * Estado del editor — modelo simplificado estilo iOS Notes:
  *
- * El concepto de "Notas" como bloque suelto desapareció: ahora el contenido
- * del discurso son **secciones** (Punto.text = título, Punto.body = cuerpo).
- * El campo legacy [legacyNotes] sólo persiste para mantener round-trip con
- * la columna Discurso.notes en discursos viejos. En cuanto el usuario edita
- * el discurso lo desplegamos como una sección "Notas" al final y dejamos el
- * campo vacío.
+ *   - [title]: título de la nota.
+ *   - [body]: cuerpo de la nota como markdown.
+ *   - [targetDurationSec]: opcional; si > 0, se muestra la barra de
+ *     cronómetro inferior. No hay UI para editarlo en v0.7.0 — se conserva
+ *     a partir de discursos guardados con versiones anteriores.
+ *
+ * Migración legacy automática al cargar:
+ *   - Si la nota tiene secciones (`pointsJson != "[]"`) o un campo `notes`
+ *     no vacío de versiones anteriores, se concatena todo en un único
+ *     [body] con saltos de línea entre secciones.
+ *   - Al guardar, se escribe sólo el [body] como `notes`, y se vacía
+ *     `pointsJson` para limpiar la data legacy.
  */
 data class EditorUiState(
     val id: Long = 0L,
     val title: String = "",
-    val scriptures: String = "",
-    val tags: String = "",
-    val points: List<Punto> = emptyList(),
-    /** Duración objetivo en minutos (string para que el usuario pueda
-     *  borrar el campo libremente sin saltar a 0). */
-    val targetMinutes: String = "",
+    val body: String = "",
+    val targetDurationSec: Int = 0,
     val loaded: Boolean = false,
     val isSaving: Boolean = false,
 ) {
     val isNew: Boolean get() = id == 0L
+    val isEmpty: Boolean get() = title.isBlank() && body.isBlank()
 }
 
 class EditorViewModel(
@@ -51,23 +53,12 @@ class EditorViewModel(
             }
             val d = repository.get(id)
             if (d != null) {
-                // Migración legacy:
-                //   1) puntos viejos con `subpoints` → los unificamos como `body`.
-                //   2) campo `notes` suelto → lo añadimos como última sección "Notas".
-                val migratedPoints = repository.decodePoints(d.pointsJson)
-                    .map { it.migrateLegacy() }
-                    .toMutableList()
-                if (d.notes.isNotBlank()) {
-                    migratedPoints += Punto(text = "Notas", body = d.notes)
-                }
+                val migratedBody = buildLegacyBody(d)
                 _state.value = EditorUiState(
                     id = d.id,
                     title = d.title,
-                    scriptures = d.scriptures,
-                    tags = d.tags,
-                    points = migratedPoints,
-                    targetMinutes = if (d.targetDurationSec > 0)
-                        (d.targetDurationSec / 60).toString() else "",
+                    body = migratedBody,
+                    targetDurationSec = d.targetDurationSec,
                     loaded = true,
                 )
             } else {
@@ -76,77 +67,61 @@ class EditorViewModel(
         }
     }
 
+    /**
+     * Construye el cuerpo unificado a partir de un Discurso heredado:
+     * concatena los puntos (cada uno con su título y body) seguidos del
+     * antiguo bloque `notes`. Si el discurso no tiene secciones, devuelve
+     * directamente `notes`.
+     */
+    private fun buildLegacyBody(d: Discurso): String {
+        val sectionsText = if (d.pointsJson.isNotBlank() && d.pointsJson != "[]") {
+            val pts = repository.decodePoints(d.pointsJson).map { it.migrateLegacy() }
+            pts.joinToString(separator = "\n\n") { p ->
+                when {
+                    p.text.isBlank() -> p.body
+                    p.body.isBlank() -> "## ${p.text}"
+                    else -> "## ${p.text}\n\n${p.body}"
+                }
+            }
+        } else ""
+
+        val joined = listOf(sectionsText, d.notes)
+            .filter { it.isNotBlank() }
+            .joinToString("\n\n")
+        return joined
+    }
+
     fun setTitle(v: String) { _state.value = _state.value.copy(title = v) }
-    fun setScriptures(v: String) { _state.value = _state.value.copy(scriptures = v) }
-    fun setTags(v: String) { _state.value = _state.value.copy(tags = v) }
-    fun setTargetMinutes(v: String) {
-        // Sólo aceptamos dígitos (hasta 4 — cubre 9999 min). Si quieren
-        // borrar el campo, [v] queda vacío y se interpreta como 0.
-        val cleaned = v.filter { it.isDigit() }.take(4)
-        _state.value = _state.value.copy(targetMinutes = cleaned)
+    fun setBody(v: String) { _state.value = _state.value.copy(body = v) }
+
+    /** Establece la duración objetivo en minutos (0 = sin objetivo). */
+    fun setTargetMinutes(min: Int) {
+        _state.value = _state.value.copy(targetDurationSec = min.coerceAtLeast(0) * 60)
     }
 
-    /** Agrega una sección nueva al final con título sugerido vacío. */
-    fun addPoint() {
-        _state.value = _state.value.copy(points = _state.value.points + Punto())
-    }
-
-    fun removePoint(index: Int) {
-        val list = _state.value.points.toMutableList()
-        if (index in list.indices) list.removeAt(index)
-        _state.value = _state.value.copy(points = list)
-    }
-
-    fun setPointText(index: Int, text: String) {
-        val list = _state.value.points.toMutableList()
-        if (index in list.indices) list[index] = list[index].copy(text = text)
-        _state.value = _state.value.copy(points = list)
-    }
-
-    fun setPointBody(index: Int, body: String) {
-        val list = _state.value.points.toMutableList()
-        if (index in list.indices) list[index] = list[index].copy(body = body)
-        _state.value = _state.value.copy(points = list)
-    }
-
-    fun movePointUp(index: Int) {
-        val list = _state.value.points.toMutableList()
-        if (index in 1..list.lastIndex) {
-            val item = list.removeAt(index)
-            list.add(index - 1, item)
-            _state.value = _state.value.copy(points = list)
-        }
-    }
-
-    fun movePointDown(index: Int) {
-        val list = _state.value.points.toMutableList()
-        if (index in 0 until list.lastIndex) {
-            val item = list.removeAt(index)
-            list.add(index + 1, item)
-            _state.value = _state.value.copy(points = list)
-        }
-    }
-
+    /**
+     * Guarda la nota. Si la nota está completamente vacía y es nueva,
+     * no la persiste y devuelve 0L. Si era una nota existente y queda
+     * vacía, la elimina.
+     */
     suspend fun save(): Long {
         val s = _state.value
+        if (s.isEmpty) {
+            if (s.id != 0L) {
+                val current = repository.get(s.id)
+                if (current != null) repository.delete(current)
+            }
+            return 0L
+        }
         _state.value = s.copy(isSaving = true)
-        val targetSec = (s.targetMinutes.toIntOrNull() ?: 0) * 60
-        // Sanitizamos los puntos: limpiamos legacy subpoints y descartamos
-        // secciones completamente vacías (sin título y sin cuerpo).
-        val cleaned = s.points
-            .map { it.copy(subpoints = emptyList()) }
-            .filter { it.text.isNotBlank() || it.body.isNotBlank() }
         val d = Discurso(
             id = s.id,
             title = s.title.trim(),
-            scriptures = s.scriptures.trim(),
-            tags = s.tags.trim(),
-            pointsJson = repository.encodePoints(cleaned),
-            // Notes ya no se usa: las notas viven dentro de cada Punto.
-            // Dejamos el campo vacío para mantener compatibilidad con la
-            // columna existente de Room.
-            notes = "",
-            targetDurationSec = targetSec,
+            scriptures = "",
+            tags = "",
+            pointsJson = "[]",
+            notes = s.body,
+            targetDurationSec = s.targetDurationSec,
         )
         val id = repository.upsert(d)
         _state.value = s.copy(id = id, isSaving = false)

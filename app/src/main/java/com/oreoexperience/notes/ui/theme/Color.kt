@@ -3,31 +3,49 @@ package com.oreoexperience.notes.ui.theme
 import androidx.compose.ui.graphics.Color
 
 /**
- * Paleta "starry / Aurora" portada del desktop OreoExperience.
- * El fondo no es plano: lo dibuja [com.oreoexperience.notes.ui.theme.AuroraBackground]
- * usando varios "blobs" radiales con estos colores como tinte.
+ * Paleta monocromática inspirada en iOS Notes (modo oscuro):
+ *
+ *   - Fondo **negro puro** (`#000000`) y dos grises sutiles para la jerarquía
+ *     de cards / divisores.
+ *   - Texto **blanco** principal y blanco con alfa para el texto secundario.
+ *   - Único acento **amarillo / dorado iOS** (`#FFCC00`) para FAB, botones
+ *     destacados, links, handles de selección.
+ *
+ * El nombre del object se mantiene `OreoPalette` para minimizar el churn de
+ * imports en el resto del código — pero internamente todos los valores son
+ * los nuevos. Si más adelante quieren cambiar a un acento distinto, sólo
+ * hay que tocar este archivo.
  */
 object OreoPalette {
-    // Bases del fondo
-    val Bg0       = Color(0xFF08090F)   // negro azulado base
-    val Bg1       = Color(0xFF0E0F2E)   // azul muy oscuro
-    val Mesh1     = Color(0xFF1F0E5A)   // violeta profundo
-    val Mesh2     = Color(0xFF3A1A6B)   // violeta medio
-    val Mesh3     = Color(0xFF2A1066)   // violeta saturado
+    // Fondos
+    val Bg0       = Color(0xFF000000)            // negro puro
+    val Bg1       = Color(0xFF0A0A0A)            // panel ligeramente más claro
+    val SurfaceCard = Color(0xFF1C1C1E)          // gris iOS systemGray6 (cards)
+    val SurfaceCardHi = Color(0xFF2C2C2E)        // gris iOS systemGray5 (hover)
 
-    // Acentos / texto
-    val Accent    = Color(0xFFB68CFF)   // violeta claro (botones primarios, marcas)
-    val AccentSub = Color(0xFF8C6BFF)   // violeta medio (highlights secundarios)
-    val OnSurface = Color(0xFFE9E4FF)   // texto principal (lavanda muy clara)
-    val OnSurfaceMuted = Color(0xFFB7B2D6)
-    val Outline   = Color(0x33B68CFF)   // contornos sutiles del cristal
-    val GlassFill = Color(0x18FFFFFF)   // relleno semi-transparente de las cards
-    val GlassFillStrong = Color(0x26FFFFFF)
-    /** Variante "frosted" muy opaca para cards de lectura: oscurece bastante
-     *  el fondo Aurora detrás para que el texto resalte como si estuviera
-     *  sobre vidrio escarchado. */
-    val GlassFillFrosted = Color(0xCC0E0F2E)
-    val DangerFill = Color(0xFFFF6B8A)
-    val WarnFill   = Color(0xFFFFC857)
-    val OkFill     = Color(0xFF7CE7B1)
+    // Texto
+    val OnSurface       = Color(0xFFFFFFFF)
+    val OnSurfaceMuted  = Color(0xB3FFFFFF)      // 70% blanco
+    val OnSurfaceFaint  = Color(0x66FFFFFF)      // 40% blanco (placeholders, fechas)
+
+    // Acento iOS amarillo / dorado
+    val Accent     = Color(0xFFFFCC00)
+    val AccentSub  = Color(0xCCFFCC00)           // 80% del acento
+
+    // Divisores y outlines sutiles
+    val Outline    = Color(0x33FFFFFF)           // 20% blanco
+    val OutlineFaint = Color(0x14FFFFFF)         // 8% blanco (separadores de filas)
+
+    // Aliases legacy (para no romper imports existentes)
+    val Mesh1     = Bg1
+    val Mesh2     = SurfaceCard
+    val Mesh3     = SurfaceCardHi
+    val GlassFill = SurfaceCard
+    val GlassFillStrong = SurfaceCardHi
+    val GlassFillFrosted = SurfaceCard
+
+    // Estados (timer)
+    val DangerFill = Color(0xFFFF453A)           // rojo iOS
+    val WarnFill   = Color(0xFFFF9F0A)           // naranja iOS
+    val OkFill     = Color(0xFF30D158)           // verde iOS
 }

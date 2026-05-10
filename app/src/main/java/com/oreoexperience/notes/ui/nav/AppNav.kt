@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -22,80 +23,64 @@ import androidx.navigation.navArgument
 import com.oreoexperience.notes.ui.editor.EditorScreen
 import com.oreoexperience.notes.ui.home.HomeScreen
 import com.oreoexperience.notes.ui.splash.SplashScreen
-import com.oreoexperience.notes.ui.theme.AuroraBackground
-import com.oreoexperience.notes.ui.viewer.ViewerScreen
+import com.oreoexperience.notes.ui.theme.OreoPalette
 
 object Routes {
     const val Home = "home"
     const val Editor = "editor/{id}"
-    const val Viewer = "viewer/{id}"
-
     fun editor(id: Long) = "editor/$id"
-    fun viewer(id: Long) = "viewer/$id"
 }
 
-// Transiciones suaves entre pantallas: tween con FastOutSlowInEasing
-// (curva estándar de Material) + slide horizontal de baja amplitud para
-// que se sienta un "deslizamiento" suave en lugar de un corte. La amplitud
-// es ~22% del ancho — lo justo para insinuar dirección sin lanzar la
-// pantalla entera al costado.
-private const val NAV_DURATION_MS = 360
-private const val NAV_EXIT_DURATION_MS = 260
-private fun forwardOffset(width: Int): Int = (width * 0.22f).toInt()
-private fun backwardOffset(width: Int): Int = -(width * 0.22f).toInt()
+// Transiciones estilo iOS: push horizontal completo desde la derecha
+// (slide del 100%) + fade-out muy sutil del de origen. Más rápidas que
+// la versión anterior — duraciones tipo iOS (260/220 ms).
+private const val NAV_DURATION_MS = 260
+private const val NAV_EXIT_DURATION_MS = 220
 
 @Composable
 fun AppNav() {
     val nav = rememberNavController()
-    // Una vez que la pantalla de carga termina su fade-out, dejamos de
-    // componerla. Mientras tanto se queda encima del NavHost bloqueando
-    // los toques (su fondo gradient es opaco).
     var showSplash by remember { mutableStateOf(true) }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        // Fondo aurora compartido por toda la app (debajo de las pantallas).
-        AuroraBackground()
-
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(OreoPalette.Bg0),
+    ) {
         NavHost(
             navController = nav,
             startDestination = Routes.Home,
-            // Las transiciones por defecto: el destino entra deslizando
-            // desde la derecha y desvanece, y al volver hace lo opuesto.
-            // Cada `composable` puede sobrescribirlas si quiere algo
-            // distinto, pero por ahora el lookup uniforme se siente bien.
             enterTransition = {
-                fadeIn(tween(NAV_DURATION_MS, easing = FastOutSlowInEasing)) +
-                    slideInHorizontally(
-                        animationSpec = tween(NAV_DURATION_MS, easing = FastOutSlowInEasing),
-                        initialOffsetX = ::forwardOffset,
-                    )
+                slideInHorizontally(
+                    animationSpec = tween(NAV_DURATION_MS, easing = FastOutSlowInEasing),
+                    initialOffsetX = { it },
+                )
             },
             exitTransition = {
                 fadeOut(tween(NAV_EXIT_DURATION_MS, easing = FastOutSlowInEasing)) +
                     slideOutHorizontally(
                         animationSpec = tween(NAV_DURATION_MS, easing = FastOutSlowInEasing),
-                        targetOffsetX = ::backwardOffset,
+                        targetOffsetX = { -it / 4 },
                     )
             },
             popEnterTransition = {
-                fadeIn(tween(NAV_DURATION_MS, easing = FastOutSlowInEasing)) +
+                fadeIn(tween(NAV_EXIT_DURATION_MS, easing = FastOutSlowInEasing)) +
                     slideInHorizontally(
                         animationSpec = tween(NAV_DURATION_MS, easing = FastOutSlowInEasing),
-                        initialOffsetX = ::backwardOffset,
+                        initialOffsetX = { -it / 4 },
                     )
             },
             popExitTransition = {
-                fadeOut(tween(NAV_EXIT_DURATION_MS, easing = FastOutSlowInEasing)) +
-                    slideOutHorizontally(
-                        animationSpec = tween(NAV_DURATION_MS, easing = FastOutSlowInEasing),
-                        targetOffsetX = ::forwardOffset,
-                    )
+                slideOutHorizontally(
+                    animationSpec = tween(NAV_DURATION_MS, easing = FastOutSlowInEasing),
+                    targetOffsetX = { it },
+                )
             },
         ) {
             composable(Routes.Home) {
                 HomeScreen(
                     onNew = { nav.navigate(Routes.editor(0L)) },
-                    onOpen = { id -> nav.navigate(Routes.viewer(id)) },
+                    onOpen = { id -> nav.navigate(Routes.editor(id)) },
                 )
             }
             composable(
@@ -106,27 +91,11 @@ fun AppNav() {
                 EditorScreen(
                     discursoId = id,
                     onBack = { nav.popBackStack() },
-                    onSaved = { newId ->
-                        nav.popBackStack()
-                        if (id == 0L && newId > 0L) nav.navigate(Routes.viewer(newId))
-                    },
-                )
-            }
-            composable(
-                Routes.Viewer,
-                arguments = listOf(navArgument("id") { type = NavType.LongType }),
-            ) { entry ->
-                val id = entry.arguments?.getLong("id") ?: 0L
-                ViewerScreen(
-                    discursoId = id,
-                    onBack = { nav.popBackStack() },
-                    onEdit = { nav.navigate(Routes.editor(id)) },
+                    onSaved = { _ -> nav.popBackStack() },
                 )
             }
         }
 
-        // Pantalla de carga sobre todo lo demás. Se desmonta sola al
-        // terminar el fade-out (vía [onFinished]).
         if (showSplash) {
             SplashScreen(onFinished = { showSplash = false })
         }

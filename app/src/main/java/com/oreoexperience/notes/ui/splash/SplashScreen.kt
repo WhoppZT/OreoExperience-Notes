@@ -1,18 +1,11 @@
 package com.oreoexperience.notes.ui.splash
 
-import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,51 +13,39 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.oreoexperience.notes.BuildConfig
 import com.oreoexperience.notes.ui.theme.OreoPalette
 import kotlinx.coroutines.delay
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
-import kotlin.random.Random
 
-private const val SPLASH_DURATION_MS = 2400L
-private const val FADE_OUT_MS = 620
+private const val SPLASH_DURATION_MS = 1400L
+private const val FADE_OUT_MS = 380
 
 /**
- * Pantalla de carga con estética Aurora: fondo nocturno oscuro, estrellas
- * titilantes, halo violeta pulsante, logo circular "O" con anillo orbital
- * giratorio, título "OreoExperience" + subtítulo "NOTAS", barra de progreso
- * animada.
+ * Pantalla de carga estilo iOS: fondo negro puro, ícono cuadrado amarillo
+ * con esquinas redondeadas (mock del icon iOS), nombre de la app debajo,
+ * y al fondo la firma "Creado por Elihu Rueda" + versión.
  *
- * Dura ~2.2 s, hace fade-out de 540 ms, y emite [onFinished] al terminar.
+ * Animación mucho más sutil que la versión Aurora: el ícono entra con un
+ * fade + scale spring (1.0 → 1.04 → 1.0), nada más. No hay halo, ni
+ * estrellas, ni anillo orbital. Total: ~1.4 s + 380 ms de fade-out.
  */
 @Composable
 fun SplashScreen(onFinished: () -> Unit) {
@@ -76,7 +57,23 @@ fun SplashScreen(onFinished: () -> Unit) {
         finishedListener = { v -> if (v == 0f) onFinished() },
     )
 
+    var entered by remember { mutableStateOf(false) }
+    val iconScale by animateFloatAsState(
+        targetValue = if (entered) 1f else 0.86f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessLow,
+        ),
+        label = "iconScale",
+    )
+    val iconAlpha by animateFloatAsState(
+        targetValue = if (entered) 1f else 0f,
+        animationSpec = tween(540, easing = EaseOutCubic),
+        label = "iconAlpha",
+    )
+
     LaunchedEffect(Unit) {
+        entered = true
         delay(SPLASH_DURATION_MS)
         visible = false
     }
@@ -87,329 +84,60 @@ fun SplashScreen(onFinished: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .alpha(alpha)
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF0A0820),
-                        Color(0xFF0F0828),
-                        Color(0xFF1B0A3A),
-                    )
-                )
-            ),
+            .background(OreoPalette.Bg0),
         contentAlignment = Alignment.Center,
     ) {
-        // Estrellas titilantes
-        TwinklingStars()
-
-        // Halo violeta pulsante detrás del logo
-        PulsingHalo(modifier = Modifier.offset(y = (-28).dp))
-
-        // Contenido central
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            LogoWithRing()
-            Spacer(Modifier.height(18.dp))
-            AppTitle()
-            AccentSubtitle()
-            Spacer(Modifier.height(4.dp))
-            LoadingLabel()
-            Spacer(Modifier.height(6.dp))
-            ProgressBar()
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            // Ícono cuadrado amarillo con la "N" estilizada en negro.
+            Box(
+                modifier = Modifier
+                    .size(96.dp)
+                    .scale(iconScale)
+                    .alpha(iconAlpha)
+                    .background(
+                        color = OreoPalette.Accent,
+                        shape = RoundedCornerShape(22.dp),
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "N",
+                    fontWeight = FontWeight.Black,
+                    fontSize = 56.sp,
+                    color = androidx.compose.ui.graphics.Color.Black,
+                )
+            }
+            Spacer(Modifier.height(20.dp))
+            Text(
+                text = "Notas",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = OreoPalette.OnSurface,
+                modifier = Modifier.alpha(iconAlpha),
+            )
         }
 
-        // Firma discreta abajo: crédito + versión.
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 26.dp),
+                .fillMaxSize()
+                .padding(bottom = 40.dp)
+                .alpha(iconAlpha),
+            verticalArrangement = Arrangement.Bottom,
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
                 text = "Creado por Elihu Rueda",
-                color = OreoPalette.Accent.copy(alpha = 0.85f),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 1.5.sp,
+                color = OreoPalette.OnSurfaceMuted,
+                fontSize = 13.sp,
             )
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(2.dp))
             Text(
                 text = "v${BuildConfig.VERSION_NAME}",
-                color = Color.White.copy(alpha = 0.30f),
+                color = OreoPalette.OnSurfaceFaint,
                 fontSize = 11.sp,
-                letterSpacing = 1.sp,
             )
         }
     }
 }
 
-/* ──────────────────────────── Estrellas ─────────────────────────── */
 
-@Composable
-private fun TwinklingStars() {
-    val inf = rememberInfiniteTransition(label = "stars")
-    val phase by inf.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(4_000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "starPhase",
-    )
-    val stars = remember {
-        val rng = Random(0xDEADBEEFL)
-        List(45) {
-            StarData(
-                ux = rng.nextFloat(),
-                uy = rng.nextFloat(),
-                r = 0.5f + rng.nextFloat() * 1.8f,
-                speed = 0.4f + rng.nextFloat() * 1.2f,
-                offset = rng.nextFloat(),
-            )
-        }
-    }
-    Canvas(Modifier.fillMaxSize()) {
-        val twoPi = (2.0 * PI).toFloat()
-        for (s in stars) {
-            val a = ((sin((phase * s.speed + s.offset) * twoPi).toFloat() + 1f) / 2f)
-                .coerceIn(0.15f, 0.9f)
-            drawCircle(
-                color = Color.White.copy(alpha = a),
-                radius = s.r.dp.toPx(),
-                center = Offset(s.ux * size.width, s.uy * size.height),
-            )
-        }
-    }
-}
-
-private data class StarData(
-    val ux: Float, val uy: Float, val r: Float,
-    val speed: Float, val offset: Float,
-)
-
-/* ───────────────────────────── Halo ─────────────────────────────── */
-
-@Composable
-private fun PulsingHalo(modifier: Modifier = Modifier) {
-    val inf = rememberInfiniteTransition(label = "halo")
-    // Pulso sutil del halo: amplitud chica + duración larga + easing
-    // cosenoidal para que el latido se sienta orgánico, no mecánico.
-    val haloScale by inf.animateFloat(
-        initialValue = 1.0f,
-        targetValue = 1.06f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2_400, easing = EaseInOutCubic),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "haloScale",
-    )
-    Canvas(modifier = modifier.size(260.dp).scale(haloScale)) {
-        val center = this.center
-        drawCircle(
-            color = Color(0x2E8C66F3),
-            radius = size.width / 2f,
-            center = center,
-        )
-        drawCircle(
-            color = Color(0x24C78DFA),
-            radius = size.width * 0.36f,
-            center = center,
-        )
-        drawCircle(
-            color = Color(0x1AF2D9FF),
-            radius = size.width * 0.22f,
-            center = center,
-        )
-    }
-}
-
-/* ──────────────────────────── Logo ──────────────────────────────── */
-
-@Composable
-private fun LogoWithRing() {
-    // Escala de aparición: spring sin rebote (NoBouncy) — el logo asoma
-    // y se asienta sin overshoot duro. Más natural que el LowBouncy
-    // anterior, que cortaba el feeling "calmo" del Aurora.
-    var targetScale by remember { mutableFloatStateOf(0.78f) }
-    val scale by animateFloatAsState(
-        targetValue = targetScale,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessLow,
-        ),
-        label = "logoScale",
-    )
-    // Opacidad
-    var targetAlpha by remember { mutableFloatStateOf(0f) }
-    val logoAlpha by animateFloatAsState(
-        targetValue = targetAlpha,
-        animationSpec = tween(720, easing = EaseOutCubic),
-        label = "logoAlpha",
-    )
-    LaunchedEffect(Unit) {
-        delay(80)
-        targetScale = 1f
-        targetAlpha = 1f
-    }
-
-    // Rotación del anillo orbital — más lenta y constante (la velocidad
-    // angular constante sí queda bien con LinearEasing, pero a 4.5s
-    // se siente meditativa en vez de apurada).
-    val inf = rememberInfiniteTransition(label = "ring")
-    val ringRotation by inf.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(4_500, easing = LinearEasing),
-        ),
-        label = "ringRotation",
-    )
-
-    Box(
-        modifier = Modifier
-            .size(120.dp)
-            .scale(scale)
-            .alpha(logoAlpha),
-        contentAlignment = Alignment.Center,
-    ) {
-        // Anillo exterior orbital
-        Box(
-            modifier = Modifier
-                .size(148.dp)
-                .rotate(ringRotation)
-                .drawBehind {
-                    val ringRadius = size.width / 2f
-                    drawCircle(
-                        color = Color(0x73C78DFA),
-                        radius = ringRadius,
-                        style = Stroke(width = 2.dp.toPx()),
-                    )
-                    val dotAngle = 0f // el ring rota; el dot queda arriba y gira con él
-                    val dotX = center.x + ringRadius * cos(dotAngle)
-                    val dotY = center.y + ringRadius * sin(dotAngle)
-                    drawCircle(
-                        color = Color.White,
-                        radius = 4.dp.toPx(),
-                        center = Offset(dotX, dotY),
-                    )
-                },
-        ) { /* solo drawBehind */ }
-
-        // Disco del logo
-        Canvas(Modifier.size(120.dp)) {
-            drawCircle(
-                brush = Brush.verticalGradient(
-                    colors = listOf(Color(0xFFA78BFA), Color(0xFF5B21B6)),
-                ),
-                radius = size.width / 2f,
-            )
-            drawCircle(
-                color = Color.White.copy(alpha = 0.18f),
-                radius = size.width / 2f,
-                style = Stroke(width = 2.dp.toPx()),
-            )
-        }
-        // "O" centrada
-        Text(
-            text = "O",
-            color = Color.White,
-            fontSize = 64.sp,
-            fontWeight = FontWeight.Bold,
-        )
-    }
-}
-
-/* ─────────────────────── Textos ─────────────────────────────────── */
-
-@Composable
-private fun AppTitle() {
-    var alpha by remember { mutableFloatStateOf(0f) }
-    val animAlpha by animateFloatAsState(
-        alpha,
-        tween(720, easing = EaseOutCubic),
-        label = "titleAlpha",
-    )
-    LaunchedEffect(Unit) { delay(220); alpha = 1f }
-    Text(
-        text = "OreoExperience",
-        color = Color.White.copy(alpha = animAlpha),
-        fontSize = 32.sp,
-        fontWeight = FontWeight.Light,
-        letterSpacing = 1.sp,
-    )
-}
-
-@Composable
-private fun AccentSubtitle() {
-    var alpha by remember { mutableFloatStateOf(0f) }
-    val animAlpha by animateFloatAsState(
-        alpha,
-        tween(820, easing = EaseOutCubic),
-        label = "accentAlpha",
-    )
-    LaunchedEffect(Unit) { delay(380); alpha = 0.95f }
-    Text(
-        text = "NOTAS",
-        color = OreoPalette.Accent.copy(alpha = animAlpha),
-        fontSize = 14.sp,
-        fontWeight = FontWeight.SemiBold,
-        letterSpacing = 8.sp,
-    )
-}
-
-@Composable
-private fun LoadingLabel() {
-    var alpha by remember { mutableFloatStateOf(0f) }
-    val animAlpha by animateFloatAsState(
-        alpha,
-        tween(900, easing = EaseOutCubic),
-        label = "loadAlpha",
-    )
-    LaunchedEffect(Unit) { delay(540); alpha = 1f }
-    Text(
-        text = "Cargando experiencia…",
-        color = Color.White.copy(alpha = animAlpha * 0.65f),
-        fontSize = 13.sp,
-    )
-}
-
-/* ──────────────── Barra de progreso ──────────────────────────────── */
-
-@Composable
-private fun ProgressBar() {
-    var progress by remember { mutableFloatStateOf(0f) }
-    val animProg by animateFloatAsState(
-        targetValue = progress,
-        animationSpec = tween(
-            durationMillis = (SPLASH_DURATION_MS - 350).toInt(),
-            easing = EaseOutCubic,
-        ),
-        label = "splashProgress",
-    )
-    LaunchedEffect(Unit) { delay(220); progress = 1f }
-
-    val barW = 240.dp
-    val barH = 4.dp
-    Canvas(
-        modifier = Modifier
-            .width(barW)
-            .height(barH),
-    ) {
-        // Track
-        drawRoundRect(
-            color = Color.White.copy(alpha = 0.10f),
-            size = size,
-            cornerRadius = CornerRadius(size.height / 2),
-        )
-        // Fill
-        drawRoundRect(
-            brush = Brush.horizontalGradient(
-                colors = listOf(Color(0xFF7C3AED), Color(0xFFC4B5FD)),
-            ),
-            size = Size(width = size.width * animProg, height = size.height),
-            cornerRadius = CornerRadius(size.height / 2),
-        )
-    }
-}
