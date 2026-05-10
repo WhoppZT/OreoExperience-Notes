@@ -1,12 +1,22 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.foundation.ExperimentalFoundationApi::class,
+)
 
 package com.oreoexperience.notes.ui.home
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +25,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -29,7 +40,13 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.automirrored.outlined.Sort
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -38,13 +55,20 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -53,10 +77,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.oreoexperience.notes.data.Discurso
+import com.oreoexperience.notes.data.NoteBlock
+import com.oreoexperience.notes.data.NoteBlockSerializer
+import com.oreoexperience.notes.data.SortBy
 import com.oreoexperience.notes.ui.LocalAppContainer
 import com.oreoexperience.notes.ui.components.SwipeToDeleteRow
 import com.oreoexperience.notes.ui.theme.OreoPalette
+import kotlinx.coroutines.launch
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -66,29 +97,44 @@ import java.util.Locale
  * Pantalla principal estilo **iOS Notes** con identidad
  * **OreoExperience Aurora**:
  *
- *   - Fondo negro puro.
- *   - Large title "OreoExperience · Notas" arriba.
- *   - Buscador rounded debajo del título.
- *   - Lista plana agrupada por mes ("Mayo 2026", "Abril 2026", etc.).
- *   - Cada fila: título (bold blanco) + preview (gris muted) + fecha.
- *   - **Swipe-to-delete**: deslizá una fila a la izquierda para borrarla.
- *   - FAB violeta redondo abajo a la derecha con ícono de lápiz.
- *   - Footer "X notas" centrado abajo.
+ *   - Top bar con menú "..." (Sort By / Settings).
+ *   - Large title "OreoExperience · Notas".
+ *   - Buscador rounded.
+ *   - **Sección Pinned** colapsable arriba (chevron animado).
+ *   - Lista plana agrupada por mes ("Mayo", "Abril 2025", etc).
+ *   - Cada fila: título + preview + fecha + thumbnail si la nota
+ *     incluye una imagen.
+ *   - **Long-press** sobre una fila → menú contextual (pin, share,
+ *     delete a papelera).
+ *   - **Swipe-to-delete**: deslizá una fila a la izquierda para
+ *     mandarla a la papelera.
+ *   - FAB violeta con ícono de lápiz.
+ *   - Footer "X notas" centrado.
  */
 @Composable
 fun HomeScreen(
     onNew: () -> Unit,
     onOpen: (Long) -> Unit,
+    onSettings: () -> Unit,
 ) {
     val container = LocalAppContainer.current
     val vm: HomeViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { HomeViewModel(container.repository, container.mediaStorage) }
+            initializer {
+                HomeViewModel(
+                    repository = container.repository,
+                    mediaStorage = container.mediaStorage,
+                    userPreferences = container.userPreferences,
+                )
+            }
         }
     )
     val state by vm.state.collectAsStateWithLifecycle()
     val query by vm.queryState.collectAsStateWithLifecycle()
-    val grouped = remember(state.items) { groupByMonth(state.items) }
+    val pinned = remember(state.items) { state.items.filter { it.pinned } }
+    val unpinned = remember(state.items) { state.items.filter { !it.pinned } }
+    val grouped = remember(unpinned) { groupByMonth(unpinned) }
+    var pinnedExpanded by remember { mutableStateOf(true) }
 
     Scaffold(
         containerColor = OreoPalette.Bg0,
@@ -125,21 +171,11 @@ fun HomeScreen(
         ) {
             // Top bar (header con "..." a la derecha)
             item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Spacer(Modifier.weight(1f))
-                    IconButton(onClick = { /* placeholder menú */ }) {
-                        Icon(
-                            imageVector = Icons.Outlined.MoreHoriz,
-                            contentDescription = null,
-                            tint = OreoPalette.Accent,
-                        )
-                    }
-                }
+                TopBar(
+                    sortBy = state.sortBy,
+                    onSortBy = vm::setSortBy,
+                    onSettings = onSettings,
+                )
             }
 
             // Large title con gradient violeta sutil en "OreoExperience".
@@ -183,21 +219,106 @@ fun HomeScreen(
             }
 
             if (state.items.isEmpty()) {
-                item {
-                    EmptyState()
-                }
+                item { EmptyState() }
             } else {
-                grouped.forEach { (label, items) ->
-                    item(key = "section-$label") {
-                        SectionHeader(label)
+                // Sección Pinned (si hay alguna nota pinned).
+                if (pinned.isNotEmpty()) {
+                    item(key = "section-pinned") {
+                        CollapsibleHeader(
+                            label = "Fijadas",
+                            expanded = pinnedExpanded,
+                            onToggle = { pinnedExpanded = !pinnedExpanded },
+                        )
                     }
+                    item(key = "group-pinned") {
+                        AnimatedVisibility(
+                            visible = pinnedExpanded,
+                            enter = fadeIn(tween(220)) + expandVertically(tween(240)),
+                            exit = fadeOut(tween(180)) + shrinkVertically(tween(220)),
+                        ) {
+                            GroupedCard(
+                                items = pinned,
+                                onOpen = onOpen,
+                                onTrash = vm::trashNote,
+                                onTogglePin = vm::togglePin,
+                            )
+                        }
+                    }
+                }
+
+                grouped.forEach { (label, items) ->
+                    item(key = "section-$label") { SectionHeader(label) }
                     item(key = "group-$label") {
                         GroupedCard(
                             items = items,
                             onOpen = onOpen,
-                            onDelete = vm::deleteNote,
+                            onTrash = vm::trashNote,
+                            onTogglePin = vm::togglePin,
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TopBar(
+    sortBy: SortBy,
+    onSortBy: (SortBy) -> Unit,
+    onSettings: () -> Unit,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    var sortOpen by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Spacer(Modifier.weight(1f))
+        Box {
+            IconButton(onClick = { menuOpen = true }) {
+                Icon(
+                    imageVector = Icons.Outlined.MoreHoriz,
+                    contentDescription = "Menú",
+                    tint = OreoPalette.Accent,
+                )
+            }
+            DropdownMenu(
+                expanded = menuOpen,
+                onDismissRequest = { menuOpen = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Ordenar por…") },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Sort, contentDescription = null) },
+                    onClick = {
+                        menuOpen = false
+                        sortOpen = true
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Ajustes") },
+                    leadingIcon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
+                    onClick = {
+                        menuOpen = false
+                        onSettings()
+                    },
+                )
+            }
+            DropdownMenu(
+                expanded = sortOpen,
+                onDismissRequest = { sortOpen = false },
+            ) {
+                SortBy.values().forEach { option ->
+                    val mark = if (option == sortBy) "✓ " else "    "
+                    DropdownMenuItem(
+                        text = { Text("$mark${option.label}") },
+                        onClick = {
+                            sortOpen = false
+                            onSortBy(option)
+                        },
+                    )
                 }
             }
         }
@@ -267,10 +388,52 @@ private fun SectionHeader(label: String) {
 }
 
 @Composable
+private fun CollapsibleHeader(
+    label: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    val rotation by animateFloatAsState(
+        targetValue = if (expanded) 0f else -90f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = 600f,
+        ),
+        label = "chevronRotation",
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onToggle,
+            )
+            .padding(start = 18.dp, end = 18.dp, top = 18.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            color = OreoPalette.OnSurface,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = "˅",
+            color = OreoPalette.Accent,
+            fontSize = 20.sp,
+            modifier = Modifier.rotate(rotation),
+        )
+    }
+}
+
+@Composable
 private fun GroupedCard(
     items: List<Discurso>,
     onOpen: (Long) -> Unit,
-    onDelete: (Discurso) -> Unit,
+    onTrash: (Discurso) -> Unit,
+    onTogglePin: (Discurso) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -283,9 +446,14 @@ private fun GroupedCard(
         items.forEachIndexed { index, d ->
             // Cada fila se envuelve en SwipeToDeleteRow para soportar
             // el gesto iOS de borrar deslizando.
-            SwipeToDeleteRow(onDelete = { onDelete(d) }) {
+            SwipeToDeleteRow(onDelete = { onTrash(d) }) {
                 Box(modifier = Modifier.background(OreoPalette.SurfaceCard)) {
-                    NoteRow(d = d, onClick = { onOpen(d.id) })
+                    NoteRow(
+                        d = d,
+                        onClick = { onOpen(d.id) },
+                        onTogglePin = { onTogglePin(d) },
+                        onTrash = { onTrash(d) },
+                    )
                 }
             }
             if (index < items.lastIndex) {
@@ -302,19 +470,27 @@ private fun GroupedCard(
 }
 
 @Composable
-private fun NoteRow(d: Discurso, onClick: () -> Unit) {
+private fun NoteRow(
+    d: Discurso,
+    onClick: () -> Unit,
+    onTogglePin: () -> Unit,
+    onTrash: () -> Unit,
+) {
     val df = remember { SimpleDateFormat("d/MM/yy", Locale("es")) }
     val title = d.title.ifBlank { "Nota nueva" }
-    val preview = remember(d.notes, d.pointsJson) { buildPreview(d) }
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val (preview, thumbName) = remember(d.notes, d.pointsJson) { buildPreviewAndThumb(d) }
+    var menuOpen by remember { mutableStateOf(false) }
 
-    // Press feedback: scale 0.97 con spring low-bouncy.
+    // Press feedback: scale 0.97 con spring critically-damped.
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val pressScale by animateFloatAsState(
         targetValue = if (pressed) 0.97f else 1f,
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioLowBouncy,
-            stiffness = Spring.StiffnessMedium,
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = 480f,
         ),
         label = "rowPressScale",
     )
@@ -322,23 +498,35 @@ private fun NoteRow(d: Discurso, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .scale(pressScale)
-            .clickable(
+            .combinedClickable(
                 interactionSource = interaction,
                 indication = null,
                 onClick = onClick,
+                onLongClick = { menuOpen = true },
             )
             .padding(horizontal = 18.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                color = OreoPalette.OnSurface,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (d.pinned) {
+                    Icon(
+                        imageVector = Icons.Outlined.PushPin,
+                        contentDescription = null,
+                        tint = OreoPalette.AccentSub,
+                        modifier = Modifier.size(13.dp),
+                    )
+                    Spacer(Modifier.size(4.dp))
+                }
+                Text(
+                    text = title,
+                    color = OreoPalette.OnSurface,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             Spacer(Modifier.height(2.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -355,6 +543,62 @@ private fun NoteRow(d: Discurso, onClick: () -> Unit) {
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+            }
+        }
+        if (thumbName != null) {
+            val container = LocalAppContainer.current
+            val file = remember(thumbName) {
+                File(container.mediaStorage.dir, thumbName)
+            }
+            Spacer(Modifier.size(10.dp))
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(OreoPalette.SurfaceCardHi),
+            ) {
+                AsyncImage(
+                    model = ImageRequest.Builder(ctx).data(file).build(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            }
+        }
+
+        Box {
+            DropdownMenu(
+                expanded = menuOpen,
+                onDismissRequest = { menuOpen = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text(if (d.pinned) "Quitar fijado" else "Fijar al tope") },
+                    leadingIcon = { Icon(Icons.Outlined.PushPin, contentDescription = null) },
+                    onClick = {
+                        menuOpen = false
+                        onTogglePin()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Compartir") },
+                    leadingIcon = { Icon(Icons.Outlined.Share, contentDescription = null) },
+                    onClick = {
+                        menuOpen = false
+                        scope.launch { shareNoteAsText(ctx, d) }
+                    },
+                )
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            "Eliminar",
+                            color = OreoPalette.DangerFill,
+                        )
+                    },
+                    onClick = {
+                        menuOpen = false
+                        onTrash()
+                    },
+                )
             }
         }
     }
@@ -403,14 +647,50 @@ private fun groupByMonth(items: List<Discurso>): List<Pair<String, List<Discurso
         .toList()
 }
 
-private fun buildPreview(d: Discurso): String {
-    val raw = d.notes.ifBlank { "" }
-    return raw
+/**
+ * Devuelve un par (preview, thumbnailFileName?) construido a partir
+ * de los bloques de la nota. El preview es texto plano con los
+ * marcadores de media removidos. El thumbnail es el filename del
+ * primer bloque de imagen encontrado.
+ */
+private fun buildPreviewAndThumb(d: Discurso): Pair<String, String?> {
+    val blocks = NoteBlockSerializer.decode(d.notes)
+    val firstImage = blocks.firstOrNull { it is NoteBlock.Image } as? NoteBlock.Image
+    val text = blocks
+        .filterIsInstance<NoteBlock.Text>()
+        .joinToString(" ") { it.markdown }
         .replace("\n", " ")
-        // Quitar marcadores de media para el preview.
-        .replace(Regex("<!--media:[^>]+-->"), "")
         .replace(Regex("[*_`#>~\\[\\]]"), "")
         .replace(Regex("<[^>]+>"), "")
         .trim()
         .take(80)
+    return text to firstImage?.fileName
+}
+
+/**
+ * Comparte el contenido de la nota como texto plano, usando un
+ * intent ACTION_SEND. El receptor (Drive, Gmail, WhatsApp, etc.) lo
+ * trata como texto.
+ */
+private fun shareNoteAsText(
+    ctx: android.content.Context,
+    d: Discurso,
+) {
+    val title = d.title.ifBlank { "Nota" }
+    val blocks = NoteBlockSerializer.decode(d.notes)
+    val body = blocks.joinToString("\n\n") { b ->
+        when (b) {
+            is NoteBlock.Text -> b.markdown
+            is NoteBlock.Image -> "[imagen: ${b.fileName}]"
+            is NoteBlock.Video -> "[video: ${b.fileName}]"
+        }
+    }
+    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(android.content.Intent.EXTRA_SUBJECT, title)
+        putExtra(android.content.Intent.EXTRA_TEXT, "$title\n\n$body")
+    }
+    ctx.startActivity(
+        android.content.Intent.createChooser(intent, "Compartir nota"),
+    )
 }

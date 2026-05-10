@@ -1,10 +1,12 @@
 package com.oreoexperience.notes.ui.theme
 
 import android.app.Activity
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
@@ -12,72 +14,113 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import com.oreoexperience.notes.data.ThemeMode
 
-/**
- * Tema "iOS Notes Dark": fondo negro puro, texto blanco, acento
- * **violeta Aurora**. Forzamos siempre el esquema oscuro
- * independientemente del setting del sistema — la app no tiene tema
- * claro por decisión del diseño.
- */
-private val IosDarkScheme = darkColorScheme(
-    primary = OreoPalette.Accent,
+/** Esquema Material3 derivado de la paleta oscura. */
+private fun iosDarkScheme() = darkColorScheme(
+    primary = DarkPalette.Accent,
     onPrimary = Color.White,
-    primaryContainer = OreoPalette.SurfaceCardHi,
-    onPrimaryContainer = OreoPalette.OnSurface,
+    primaryContainer = DarkPalette.SurfaceCardHi,
+    onPrimaryContainer = DarkPalette.OnSurface,
 
-    secondary = OreoPalette.Accent,
+    secondary = DarkPalette.Accent,
     onSecondary = Color.White,
 
-    tertiary = OreoPalette.AccentSub,
+    tertiary = DarkPalette.AccentSub,
     onTertiary = Color.White,
 
-    background = OreoPalette.Bg0,
-    onBackground = OreoPalette.OnSurface,
+    background = DarkPalette.Bg0,
+    onBackground = DarkPalette.OnSurface,
 
-    surface = OreoPalette.Bg0,
-    onSurface = OreoPalette.OnSurface,
-    surfaceVariant = OreoPalette.SurfaceCard,
-    onSurfaceVariant = OreoPalette.OnSurfaceMuted,
+    surface = DarkPalette.Bg0,
+    onSurface = DarkPalette.OnSurface,
+    surfaceVariant = DarkPalette.SurfaceCard,
+    onSurfaceVariant = DarkPalette.OnSurfaceMuted,
 
-    outline = OreoPalette.Outline,
-    outlineVariant = OreoPalette.OutlineFaint,
+    outline = DarkPalette.Outline,
+    outlineVariant = DarkPalette.OutlineFaint,
 
-    error = OreoPalette.DangerFill,
+    error = DarkPalette.DangerFill,
     onError = Color.White,
 )
 
+/** Esquema Material3 derivado de la paleta clara. */
+private fun iosLightScheme() = lightColorScheme(
+    primary = LightPalette.Accent,
+    onPrimary = Color.White,
+    primaryContainer = LightPalette.SurfaceCardHi,
+    onPrimaryContainer = LightPalette.OnSurface,
+
+    secondary = LightPalette.Accent,
+    onSecondary = Color.White,
+
+    tertiary = LightPalette.AccentSub,
+    onTertiary = Color.White,
+
+    background = LightPalette.Bg0,
+    onBackground = LightPalette.OnSurface,
+
+    surface = LightPalette.Bg0,
+    onSurface = LightPalette.OnSurface,
+    surfaceVariant = LightPalette.SurfaceCard,
+    onSurfaceVariant = LightPalette.OnSurfaceMuted,
+
+    outline = LightPalette.Outline,
+    outlineVariant = LightPalette.OutlineFaint,
+
+    error = LightPalette.DangerFill,
+    onError = Color.White,
+)
+
+/**
+ * Tema "iOS Notes" con soporte light + dark + system. La paleta
+ * activa se determina con [themeMode]; si es [ThemeMode.SYSTEM] se
+ * sigue al sistema operativo en tiempo real.
+ */
 @Composable
 fun OreoExperienceTheme(
-    @Suppress("UNUSED_PARAMETER") darkTheme: Boolean = true,
+    themeMode: ThemeMode = ThemeMode.SYSTEM,
     content: @Composable () -> Unit,
 ) {
+    val systemDark = isSystemInDarkTheme()
+    val isDark = when (themeMode) {
+        ThemeMode.SYSTEM -> systemDark
+        ThemeMode.LIGHT  -> false
+        ThemeMode.DARK   -> true
+    }
+
+    // Sincroniza la paleta global usada por OreoPalette.X con el modo
+    // resuelto. Es seguro hacerlo aquí porque el tema envuelve todo el
+    // árbol y los hijos siempre recomponen al cambiar el modo.
+    ActivePalette = if (isDark) DarkPalette else LightPalette
+
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            // Status bar y nav bar transparentes; los iconos en blanco
-            // sobre el fondo negro de la app.
+            // Status bar y nav bar transparentes; los iconos se invierten
+            // según el fondo (oscuros sobre claro, claros sobre oscuro).
             window.statusBarColor = Color.Transparent.toArgb()
             window.navigationBarColor = Color.Transparent.toArgb()
             WindowCompat.getInsetsController(window, view).apply {
-                isAppearanceLightStatusBars = false
-                isAppearanceLightNavigationBars = false
+                isAppearanceLightStatusBars = !isDark
+                isAppearanceLightNavigationBars = !isDark
             }
         }
     }
 
-    // Selección de texto en violeta Aurora.
-    val iosSelectionColors = TextSelectionColors(
-        handleColor = OreoPalette.Accent,
-        backgroundColor = OreoPalette.AccentSub.copy(alpha = 0.35f),
+    val palette = if (isDark) DarkPalette else LightPalette
+    val selection = TextSelectionColors(
+        handleColor = palette.Accent,
+        backgroundColor = palette.AccentSub.copy(alpha = 0.35f),
     )
 
     MaterialTheme(
-        colorScheme = IosDarkScheme,
+        colorScheme = if (isDark) iosDarkScheme() else iosLightScheme(),
         typography = OreoTypography,
     ) {
         CompositionLocalProvider(
-            LocalTextSelectionColors provides iosSelectionColors,
+            LocalTextSelectionColors provides selection,
             content = content,
         )
     }

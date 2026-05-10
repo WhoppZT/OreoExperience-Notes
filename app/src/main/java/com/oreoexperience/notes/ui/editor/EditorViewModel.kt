@@ -33,6 +33,7 @@ data class EditorUiState(
     val title: String = "",
     val blocks: List<NoteBlock> = listOf(NoteBlock.Text(markdown = "")),
     val targetDurationSec: Int = 0,
+    val pinned: Boolean = false,
     val loaded: Boolean = false,
     val isSaving: Boolean = false,
 ) {
@@ -66,6 +67,7 @@ class EditorViewModel(
                     title = d.title,
                     blocks = NoteBlockSerializer.decode(migratedBody),
                     targetDurationSec = d.targetDurationSec,
+                    pinned = d.pinned,
                     loaded = true,
                 )
             } else {
@@ -180,6 +182,17 @@ class EditorViewModel(
         _state.value = _state.value.copy(targetDurationSec = min.coerceAtLeast(0) * 60)
     }
 
+    fun togglePin() {
+        val s = _state.value
+        _state.value = s.copy(pinned = !s.pinned)
+        if (s.id != 0L) {
+            viewModelScope.launch {
+                val current = repository.get(s.id) ?: return@launch
+                repository.setPinned(current, !s.pinned)
+            }
+        }
+    }
+
     /**
      * Guarda la nota. Si la nota está completamente vacía y es nueva,
      * no la persiste y devuelve 0L. Si era una nota existente y queda
@@ -201,6 +214,8 @@ class EditorViewModel(
         }
         _state.value = s.copy(isSaving = true)
         val body = NoteBlockSerializer.encode(s.blocks)
+        // Conservar createdAt si la nota ya existía.
+        val existing = if (s.id != 0L) repository.get(s.id) else null
         val d = Discurso(
             id = s.id,
             title = s.title.trim(),
@@ -209,20 +224,26 @@ class EditorViewModel(
             pointsJson = "[]",
             notes = body,
             targetDurationSec = s.targetDurationSec,
+            pinned = s.pinned,
+            deletedAt = null,
+            createdAt = existing?.createdAt ?: System.currentTimeMillis(),
         )
         val id = repository.upsert(d)
         _state.value = s.copy(id = id, isSaving = false)
         return id
     }
 
+    /**
+     * "Eliminar" desde el editor manda la nota a la **papelera** (soft
+     * delete) — no borra archivos de media, así "Restaurar" la deja
+     * intacta. La purga real de los media ocurre cuando la papelera se
+     * elimina permanentemente o cuando expira a los 30 días.
+     */
     suspend fun deleteCurrent(): Boolean {
         val s = _state.value
         if (s.id == 0L) return false
         val current = repository.get(s.id) ?: return false
-        NoteBlockSerializer.mediaFiles(s.blocks).forEach {
-            mediaStorage.deleteIfExists(it)
-        }
-        repository.delete(current)
+        repository.trash(current)
         return true
     }
 }

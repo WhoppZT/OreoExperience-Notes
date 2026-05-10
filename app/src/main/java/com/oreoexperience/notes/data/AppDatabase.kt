@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Discurso::class],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -31,9 +31,25 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v3: agrega [Discurso.pinned] (boolean) y [Discurso.deletedAt]
+         * (timestamp nullable) para soportar pin de notas y la papelera de
+         * "Eliminadas recientemente".
+         */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE discursos ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0"
+                )
+                db.execSQL(
+                    "ALTER TABLE discursos ADD COLUMN deletedAt INTEGER"
+                )
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, DB_NAME)
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
     }
 }

@@ -28,6 +28,14 @@ data class Discurso(
     val updatedAt: Long = System.currentTimeMillis(),
     /** Duración objetivo del discurso en segundos. 0 = sin objetivo. */
     val targetDurationSec: Int = 0,
+    /** Si la nota está fijada al tope (estilo iOS Notes "Pinned"). */
+    val pinned: Boolean = false,
+    /**
+     * Timestamp en que la nota se mandó a la papelera. `null` = nota activa.
+     * Una nota con [deletedAt] no nulo se muestra sólo en "Eliminadas
+     * recientemente" y se purga automáticamente pasados 30 días.
+     */
+    val deletedAt: Long? = null,
 )
 
 /**

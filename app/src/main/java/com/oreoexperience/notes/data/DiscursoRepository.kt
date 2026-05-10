@@ -14,6 +14,8 @@ class DiscursoRepository(private val dao: DiscursoDao) {
 
     fun observeAll(): Flow<List<Discurso>> = dao.observeAll()
 
+    fun observeTrashed(): Flow<List<Discurso>> = dao.observeTrashed()
+
     fun observeById(id: Long): Flow<Discurso?> = dao.observeById(id)
 
     suspend fun get(id: Long): Discurso? = dao.getById(id)
@@ -28,7 +30,30 @@ class DiscursoRepository(private val dao: DiscursoDao) {
         }
     }
 
+    /** Soft delete: marca la nota como eliminada (va a la papelera). */
+    suspend fun trash(d: Discurso) {
+        dao.update(d.copy(deletedAt = System.currentTimeMillis()))
+    }
+
+    /** Restaurar una nota desde la papelera. */
+    suspend fun restore(d: Discurso) {
+        dao.update(d.copy(deletedAt = null, updatedAt = System.currentTimeMillis()))
+    }
+
+    /** Cambiar el estado pin/unpin. */
+    suspend fun setPinned(d: Discurso, pinned: Boolean) {
+        dao.update(d.copy(pinned = pinned, updatedAt = System.currentTimeMillis()))
+    }
+
+    /** Hard delete real. */
     suspend fun delete(d: Discurso) = dao.delete(d)
+
+    /** Purgar las notas en papelera más antiguas que [olderThan] ms. */
+    suspend fun purgeOlderThan(olderThan: Long): List<Discurso> {
+        val candidates = dao.trashedOlderThan(olderThan)
+        candidates.forEach { dao.delete(it) }
+        return candidates
+    }
 
     suspend fun deleteAll() = dao.deleteAll()
 

@@ -27,41 +27,47 @@ import com.oreoexperience.notes.ui.LocalAppContainer
 import com.oreoexperience.notes.ui.editor.EditorScreen
 import com.oreoexperience.notes.ui.home.HomeScreen
 import com.oreoexperience.notes.ui.onboarding.OnboardingScreen
+import com.oreoexperience.notes.ui.settings.SettingsScreen
 import com.oreoexperience.notes.ui.splash.SplashScreen
 import com.oreoexperience.notes.ui.theme.OreoPalette
+import com.oreoexperience.notes.ui.trash.TrashScreen
 
 object Routes {
     const val Home = "home"
     const val Editor = "editor/{id}"
+    const val Settings = "settings"
+    const val Trash = "trash"
     fun editor(id: Long) = "editor/$id"
 }
 
 /**
  * Animaciones de navegación estilo iOS:
  *
- *   - Push horizontal completo desde la derecha con un **spring**
- *     (low-bouncy + stiffness medium-low) en lugar de un tween — así
- *     se asienta con un sutil rebote en lugar de cortarse seco.
- *   - El destino que se va se desliza un cuarto de pantalla a la
- *     izquierda (parallax típico de iOS) con fade simultáneo.
- *   - El fade y el scale (sutil, 0.97 → 1.0) usan tween corto
- *     (220 ms) para que el deslizamiento no se vea entrecortado al
- *     comienzo.
- *
- * Centralizo los specs en estas funciones para que todas las
- * pantallas se vean consistentes.
+ *   - Push horizontal completo desde la derecha con un spring
+ *     **críticamente amortiguado** (sin overshoot) y stiffness medio,
+ *     que reproduce la curva nativa de UIKit (`spring(response: 0.45,
+ *     dampingFraction: 1.0)`).
+ *   - El destino que se va se desliza un tercio a la izquierda
+ *     (parallax típico de iOS) con fade simultáneo.
+ *   - Fade rápido (180 ms con curva fast-out-slow-in) para que la
+ *     transición se sienta fluida.
+ *   - Scale de entrada sutil (0.985 → 1.0) — apenas perceptible,
+ *     suficiente para dar la sensación de "asentar".
  */
 private fun slideSpring() = spring<androidx.compose.ui.unit.IntOffset>(
-    dampingRatio = Spring.DampingRatioLowBouncy,
-    stiffness = Spring.StiffnessMediumLow,
+    dampingRatio = Spring.DampingRatioNoBouncy,
+    stiffness = 380f,
 )
 
 private fun scaleSpring() = spring<Float>(
-    dampingRatio = Spring.DampingRatioLowBouncy,
-    stiffness = Spring.StiffnessMediumLow,
+    dampingRatio = Spring.DampingRatioNoBouncy,
+    stiffness = 420f,
 )
 
-private fun fadeSpec() = tween<Float>(durationMillis = 220)
+private fun fadeSpec() = tween<Float>(
+    durationMillis = 180,
+    easing = androidx.compose.animation.core.FastOutSlowInEasing,
+)
 
 @Composable
 fun AppNav() {
@@ -80,9 +86,9 @@ fun AppNav() {
         NavHost(
             navController = nav,
             startDestination = Routes.Home,
-            // Entrada del destino nuevo: slide desde la derecha con
-            // spring + fade + scale sutil. El scale agrega esa
-            // sensación de "modal" que tiene iOS al abrir una nota.
+            // Push iOS: el destino entra desde la derecha con spring
+            // críticamente amortiguado (sin overshoot) + fade rápido +
+            // scale apenas perceptible.
             enterTransition = {
                 slideInHorizontally(
                     animationSpec = slideSpring(),
@@ -90,28 +96,26 @@ fun AppNav() {
                 ) + fadeIn(animationSpec = fadeSpec()) +
                     scaleIn(
                         animationSpec = scaleSpring(),
-                        initialScale = 0.97f,
+                        initialScale = 0.985f,
                     )
             },
-            // El de origen se va parallax (un cuarto a la izquierda)
-            // + fade-out sutil. Mismo spring que la entrada para que
-            // el movimiento se sienta acoplado.
+            // El de origen se va con parallax (un tercio a la
+            // izquierda) + fade. Mismo spring que la entrada.
             exitTransition = {
                 slideOutHorizontally(
                     animationSpec = slideSpring(),
-                    targetOffsetX = { -it / 4 },
+                    targetOffsetX = { -it / 3 },
                 ) + fadeOut(animationSpec = fadeSpec())
             },
-            // Pop: el origen vuelve desde la izquierda (parallax
-            // inverso) con el mismo spring.
+            // Pop: la origen vuelve desde la izquierda (parallax
+            // inverso).
             popEnterTransition = {
                 slideInHorizontally(
                     animationSpec = slideSpring(),
-                    initialOffsetX = { -it / 4 },
+                    initialOffsetX = { -it / 3 },
                 ) + fadeIn(animationSpec = fadeSpec())
             },
-            // Pop: el destino se va deslizando completo hacia la
-            // derecha + scale-out sutil.
+            // Pop: el destino se va deslizando hacia la derecha.
             popExitTransition = {
                 slideOutHorizontally(
                     animationSpec = slideSpring(),
@@ -119,7 +123,7 @@ fun AppNav() {
                 ) + fadeOut(animationSpec = fadeSpec()) +
                     scaleOut(
                         animationSpec = scaleSpring(),
-                        targetScale = 0.97f,
+                        targetScale = 0.985f,
                     )
             },
         ) {
@@ -127,6 +131,7 @@ fun AppNav() {
                 HomeScreen(
                     onNew = { nav.navigate(Routes.editor(0L)) },
                     onOpen = { id -> nav.navigate(Routes.editor(id)) },
+                    onSettings = { nav.navigate(Routes.Settings) },
                 )
             }
             composable(
@@ -138,6 +143,18 @@ fun AppNav() {
                     discursoId = id,
                     onBack = { nav.popBackStack() },
                     onSaved = { _ -> nav.popBackStack() },
+                )
+            }
+            composable(Routes.Settings) {
+                SettingsScreen(
+                    onBack = { nav.popBackStack() },
+                    onTrash = { nav.navigate(Routes.Trash) },
+                )
+            }
+            composable(Routes.Trash) {
+                TrashScreen(
+                    onBack = { nav.popBackStack() },
+                    onOpen = { id -> nav.navigate(Routes.editor(id)) },
                 )
             }
         }

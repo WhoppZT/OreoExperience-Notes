@@ -21,8 +21,13 @@ import java.util.UUID
  */
 class MediaStorage(private val context: Context) {
 
-    private val mediaDir: File =
+    /** Carpeta donde viven los archivos importados. Pública para poder
+     *  pasar `File(dir, name)` directamente a Coil sin atravesar
+     *  contentResolver. */
+    val dir: File =
         File(context.filesDir, "media").apply { if (!exists()) mkdirs() }
+
+    private val mediaDir: File get() = dir
 
     /**
      * Copia el contenido de [src] a la carpeta interna y devuelve el

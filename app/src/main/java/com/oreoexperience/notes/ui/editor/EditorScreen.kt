@@ -40,7 +40,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
-import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FormatBold
 import androidx.compose.material.icons.outlined.FormatItalic
@@ -49,6 +49,8 @@ import androidx.compose.material.icons.outlined.FormatStrikethrough
 import androidx.compose.material.icons.outlined.FormatUnderlined
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Title
 import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material3.AlertDialog
@@ -75,6 +77,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -136,6 +139,7 @@ fun EditorScreen(
     LaunchedEffect(discursoId) { vm.load(discursoId) }
     val state by vm.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
+    val ctxLocal = LocalContext.current
     var showDelete by remember { mutableStateOf(false) }
     var showTimerDialog by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
@@ -229,7 +233,7 @@ fun EditorScreen(
             ) {
                 TextButton(onClick = { scope.launch { saveAndBack() } }) {
                     Icon(
-                        imageVector = Icons.Outlined.ArrowBack,
+                        imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
                         contentDescription = null,
                         tint = OreoPalette.Accent,
                         modifier = Modifier.size(18.dp),
@@ -255,6 +259,28 @@ fun EditorScreen(
                         expanded = menuOpen,
                         onDismissRequest = { menuOpen = false },
                     ) {
+                        if (!state.isNew) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(if (state.pinned) "Quitar fijado" else "Fijar al tope")
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Outlined.PushPin, null)
+                                },
+                                onClick = {
+                                    menuOpen = false
+                                    vm.togglePin()
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Compartir") },
+                                leadingIcon = { Icon(Icons.Outlined.Share, null) },
+                                onClick = {
+                                    menuOpen = false
+                                    shareEditorState(context = ctxLocal, vmState = state)
+                                },
+                            )
+                        }
                         DropdownMenuItem(
                             text = { Text("Establecer cronómetro") },
                             onClick = {
@@ -707,4 +733,31 @@ private fun TimerDurationDialog(
 private fun formatNowDate(): String {
     val sdf = SimpleDateFormat("d 'de' MMMM 'de' yyyy 'a las' HH:mm", Locale("es"))
     return sdf.format(Date())
+}
+
+/**
+ * Comparte la nota como texto plano (concatena los bloques de texto +
+ * marcadores legibles para los media). El receptor (Drive, Gmail,
+ * Telegram, etc.) lo abre como un text/plain común.
+ */
+private fun shareEditorState(
+    context: android.content.Context,
+    vmState: EditorUiState,
+) {
+    val title = vmState.title.ifBlank { "Nota" }
+    val body = vmState.blocks.joinToString("\n\n") { b ->
+        when (b) {
+            is NoteBlock.Text -> b.markdown
+            is NoteBlock.Image -> "[imagen: ${b.fileName}]"
+            is NoteBlock.Video -> "[video: ${b.fileName}]"
+        }
+    }
+    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(android.content.Intent.EXTRA_SUBJECT, title)
+        putExtra(android.content.Intent.EXTRA_TEXT, "$title\n\n$body")
+    }
+    context.startActivity(
+        android.content.Intent.createChooser(intent, "Compartir nota"),
+    )
 }
