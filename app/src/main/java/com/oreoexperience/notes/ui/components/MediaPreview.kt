@@ -157,6 +157,8 @@ fun MediaPreview(
             },
             containerColor = OreoPalette.SurfaceCard,
             titleContentColor = OreoPalette.OnSurface,
+            textContentColor = OreoPalette.OnSurfaceMuted,
+            shape = RoundedCornerShape(28.dp),
         )
     }
 }

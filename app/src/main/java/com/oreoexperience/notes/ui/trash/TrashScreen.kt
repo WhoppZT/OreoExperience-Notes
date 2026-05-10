@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import com.oreoexperience.notes.data.Discurso
 import com.oreoexperience.notes.data.NoteBlockSerializer
 import com.oreoexperience.notes.ui.LocalAppContainer
+import com.oreoexperience.notes.ui.components.InlineStatusMessage
 import com.oreoexperience.notes.ui.theme.OreoPalette
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
@@ -147,7 +148,7 @@ fun TrashScreen(
                             .padding(horizontal = 12.dp)
                             .background(
                                 color = OreoPalette.SurfaceCard,
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(20.dp),
                             ),
                     ) {
                         items.forEachIndexed { index, d ->
@@ -187,12 +188,8 @@ fun TrashScreen(
 
             snack?.let {
                 item {
-                    Text(
+                    InlineStatusMessage(
                         text = it,
-                        color = OreoPalette.AccentSub,
-                        fontSize = 13.sp,
-                        modifier = Modifier
-                            .padding(horizontal = 18.dp, vertical = 8.dp),
                     )
                 }
             }

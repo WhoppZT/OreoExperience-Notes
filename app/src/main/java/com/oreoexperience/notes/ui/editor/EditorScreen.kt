@@ -11,8 +11,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -22,6 +21,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -82,6 +82,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -97,6 +98,7 @@ import com.oreoexperience.notes.data.NoteBlock
 import com.oreoexperience.notes.ui.LocalAppContainer
 import com.oreoexperience.notes.ui.components.BottomTimerBar
 import com.oreoexperience.notes.ui.components.MediaPreview
+import com.oreoexperience.notes.ui.theme.OreoMotion
 import com.oreoexperience.notes.ui.theme.OreoPalette
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
@@ -398,23 +400,16 @@ fun EditorScreen(
                 Spacer(Modifier.height(120.dp))
             }
 
-            // Cronómetro inferior con slide-up + spring.
             AnimatedVisibility(
                 visible = state.loaded && state.targetDurationSec > 0,
                 enter = slideInVertically(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessMediumLow,
-                    ),
-                    initialOffsetY = { it },
-                ) + fadeIn(),
+                    animationSpec = tween(320, easing = OreoMotion.EaseOut),
+                    initialOffsetY = { it / 2 },
+                ) + fadeIn(tween(180, easing = OreoMotion.EaseOut)),
                 exit = slideOutVertically(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMediumLow,
-                    ),
+                    animationSpec = tween(240, easing = OreoMotion.EaseInOut),
                     targetOffsetY = { it },
-                ) + fadeOut(),
+                ) + fadeOut(tween(140, easing = OreoMotion.EaseInOut)),
             ) {
                 BottomTimerBar(
                     targetSec = state.targetDurationSec,
@@ -477,6 +472,7 @@ fun EditorScreen(
                 containerColor = OreoPalette.SurfaceCard,
                 titleContentColor = OreoPalette.OnSurface,
                 textContentColor = OreoPalette.OnSurfaceMuted,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
             )
         }
     }
@@ -528,6 +524,7 @@ private fun TextBlockEditor(
             color = OreoPalette.OnSurface,
             fontSize = 17.sp,
             lineHeight = 24.sp,
+            textAlign = TextAlign.Start,
         ),
         colors = RichTextEditorDefaults.richTextEditorColors(
             focusedIndicatorColor = Color.Transparent,
@@ -543,8 +540,10 @@ private fun TextBlockEditor(
                 text = "Empezá a escribir…",
                 color = OreoPalette.OnSurfaceFaint,
                 fontSize = 17.sp,
+                textAlign = TextAlign.Start,
             )
         },
+        contentPadding = PaddingValues(0.dp),
     )
 }
 
@@ -727,6 +726,8 @@ private fun TimerDurationDialog(
         },
         containerColor = OreoPalette.SurfaceCard,
         titleContentColor = OreoPalette.OnSurface,
+        textContentColor = OreoPalette.OnSurfaceMuted,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
     )
 }
 

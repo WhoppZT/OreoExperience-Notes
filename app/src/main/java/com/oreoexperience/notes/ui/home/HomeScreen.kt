@@ -6,9 +6,7 @@
 package com.oreoexperience.notes.ui.home
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -85,6 +83,7 @@ import com.oreoexperience.notes.data.NoteBlockSerializer
 import com.oreoexperience.notes.data.SortBy
 import com.oreoexperience.notes.ui.LocalAppContainer
 import com.oreoexperience.notes.ui.components.SwipeToDeleteRow
+import com.oreoexperience.notes.ui.theme.OreoMotion
 import com.oreoexperience.notes.ui.theme.OreoPalette
 import kotlinx.coroutines.launch
 import java.io.File
@@ -233,8 +232,10 @@ fun HomeScreen(
                     item(key = "group-pinned") {
                         AnimatedVisibility(
                             visible = pinnedExpanded,
-                            enter = fadeIn(tween(220)) + expandVertically(tween(240)),
-                            exit = fadeOut(tween(180)) + shrinkVertically(tween(220)),
+                            enter = fadeIn(tween(160, easing = OreoMotion.EaseOut)) +
+                                expandVertically(tween(260, easing = OreoMotion.EaseOut)),
+                            exit = fadeOut(tween(120, easing = OreoMotion.EaseInOut)) +
+                                shrinkVertically(tween(200, easing = OreoMotion.EaseInOut)),
                         ) {
                             GroupedCard(
                                 items = pinned,
@@ -335,7 +336,7 @@ private fun SearchBar(
         modifier = modifier
             .background(
                 color = OreoPalette.SurfaceCard,
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(18.dp),
             )
             .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
@@ -395,10 +396,7 @@ private fun CollapsibleHeader(
 ) {
     val rotation by animateFloatAsState(
         targetValue = if (expanded) 0f else -90f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = 600f,
-        ),
+        animationSpec = tween(240, easing = OreoMotion.EaseOut),
         label = "chevronRotation",
     )
     Row(
@@ -440,7 +438,7 @@ private fun GroupedCard(
             .padding(horizontal = 12.dp)
             .background(
                 color = OreoPalette.SurfaceCard,
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(20.dp),
             ),
     ) {
         items.forEachIndexed { index, d ->
@@ -488,10 +486,7 @@ private fun NoteRow(
     val pressed by interaction.collectIsPressedAsState()
     val pressScale by animateFloatAsState(
         targetValue = if (pressed) 0.97f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = 480f,
-        ),
+        animationSpec = tween(120, easing = OreoMotion.EaseOut),
         label = "rowPressScale",
     )
 
