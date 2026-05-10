@@ -34,6 +34,7 @@ import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Icon
@@ -171,6 +172,19 @@ fun SettingsScreen(
                         title = "Tema",
                         trailing = themeMode.label,
                         onClick = { showThemePicker = true },
+                    )
+                }
+            }
+
+            item { SectionHeader("Acceso") }
+            item {
+                SectionCard {
+                    ChevronRow(
+                        icon = Icons.Outlined.Lock,
+                        iconTint = OreoPalette.Accent,
+                        title = "Bloquear aplicación",
+                        subtitle = "Vuelve a pedir credenciales al abrir",
+                        onClick = { prefs.lockAccess() },
                     )
                 }
             }

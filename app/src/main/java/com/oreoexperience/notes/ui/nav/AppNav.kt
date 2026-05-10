@@ -1,12 +1,10 @@
 package com.oreoexperience.notes.ui.nav
 
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
@@ -18,12 +16,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.IntOffset
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.oreoexperience.notes.ui.LocalAppContainer
+import com.oreoexperience.notes.ui.auth.AccessScreen
 import com.oreoexperience.notes.ui.editor.EditorScreen
 import com.oreoexperience.notes.ui.home.HomeScreen
 import com.oreoexperience.notes.ui.onboarding.OnboardingScreen
@@ -40,34 +40,13 @@ object Routes {
     fun editor(id: Long) = "editor/$id"
 }
 
-/**
- * Animaciones de navegación estilo iOS:
- *
- *   - Push horizontal completo desde la derecha con un spring
- *     **críticamente amortiguado** (sin overshoot) y stiffness medio,
- *     que reproduce la curva nativa de UIKit (`spring(response: 0.45,
- *     dampingFraction: 1.0)`).
- *   - El destino que se va se desliza un tercio a la izquierda
- *     (parallax típico de iOS) con fade simultáneo.
- *   - Fade rápido (180 ms con curva fast-out-slow-in) para que la
- *     transición se sienta fluida.
- *   - Scale de entrada sutil (0.985 → 1.0) — apenas perceptible,
- *     suficiente para dar la sensación de "asentar".
- */
-private fun slideSpring() = spring<androidx.compose.ui.unit.IntOffset>(
-    dampingRatio = Spring.DampingRatioNoBouncy,
-    stiffness = 380f,
-)
+private val IosEaseOut = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
 
-private fun scaleSpring() = spring<Float>(
-    dampingRatio = Spring.DampingRatioNoBouncy,
-    stiffness = 420f,
-)
+private fun slideSpec(): FiniteAnimationSpec<IntOffset> =
+    tween(durationMillis = 360, easing = IosEaseOut)
 
-private fun fadeSpec() = tween<Float>(
-    durationMillis = 180,
-    easing = androidx.compose.animation.core.FastOutSlowInEasing,
-)
+private fun fadeSpec(): FiniteAnimationSpec<Float> =
+    tween(durationMillis = 160, easing = IosEaseOut)
 
 @Composable
 fun AppNav() {
@@ -77,6 +56,7 @@ fun AppNav() {
     var showOnboarding by remember {
         mutableStateOf(!container.userPreferences.onboardingDone)
     }
+    val accessUnlocked by container.userPreferences.accessUnlockedState
 
     Box(
         modifier = Modifier
@@ -86,45 +66,29 @@ fun AppNav() {
         NavHost(
             navController = nav,
             startDestination = Routes.Home,
-            // Push iOS: el destino entra desde la derecha con spring
-            // críticamente amortiguado (sin overshoot) + fade rápido +
-            // scale apenas perceptible.
             enterTransition = {
                 slideInHorizontally(
-                    animationSpec = slideSpring(),
+                    animationSpec = slideSpec(),
                     initialOffsetX = { it },
-                ) + fadeIn(animationSpec = fadeSpec()) +
-                    scaleIn(
-                        animationSpec = scaleSpring(),
-                        initialScale = 0.985f,
-                    )
+                ) + fadeIn(animationSpec = fadeSpec())
             },
-            // El de origen se va con parallax (un tercio a la
-            // izquierda) + fade. Mismo spring que la entrada.
             exitTransition = {
                 slideOutHorizontally(
-                    animationSpec = slideSpring(),
+                    animationSpec = slideSpec(),
                     targetOffsetX = { -it / 3 },
                 ) + fadeOut(animationSpec = fadeSpec())
             },
-            // Pop: la origen vuelve desde la izquierda (parallax
-            // inverso).
             popEnterTransition = {
                 slideInHorizontally(
-                    animationSpec = slideSpring(),
+                    animationSpec = slideSpec(),
                     initialOffsetX = { -it / 3 },
                 ) + fadeIn(animationSpec = fadeSpec())
             },
-            // Pop: el destino se va deslizando hacia la derecha.
             popExitTransition = {
                 slideOutHorizontally(
-                    animationSpec = slideSpring(),
+                    animationSpec = slideSpec(),
                     targetOffsetX = { it },
-                ) + fadeOut(animationSpec = fadeSpec()) +
-                    scaleOut(
-                        animationSpec = scaleSpring(),
-                        targetScale = 0.985f,
-                    )
+                ) + fadeOut(animationSpec = fadeSpec())
             },
         ) {
             composable(Routes.Home) {
@@ -163,10 +127,14 @@ fun AppNav() {
             SplashScreen(onFinished = { showSplash = false })
         }
 
-        // Onboarding queda por encima del splash sólo en el primer
-        // arranque. Una vez completado se persiste el flag para que
-        // no vuelva a aparecer.
-        if (!showSplash && showOnboarding) {
+        if (!showSplash && !accessUnlocked) {
+            AccessScreen(
+                onUnlocked = { email ->
+                    container.userPreferences.unlockAccess(email)
+                    showOnboarding = !container.userPreferences.onboardingDone
+                },
+            )
+        } else if (!showSplash && showOnboarding) {
             OnboardingScreen(
                 onFinish = {
                     container.userPreferences.onboardingDone = true
