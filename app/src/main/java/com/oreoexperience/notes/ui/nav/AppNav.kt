@@ -1,9 +1,12 @@
 package com.oreoexperience.notes.ui.nav
 
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
@@ -31,11 +34,32 @@ object Routes {
     fun editor(id: Long) = "editor/$id"
 }
 
-// Transiciones estilo iOS: push horizontal completo desde la derecha
-// (slide del 100%) + fade-out muy sutil del de origen. Más rápidas que
-// la versión anterior — duraciones tipo iOS (260/220 ms).
-private const val NAV_DURATION_MS = 260
-private const val NAV_EXIT_DURATION_MS = 220
+/**
+ * Animaciones de navegación estilo iOS:
+ *
+ *   - Push horizontal completo desde la derecha con un **spring**
+ *     (low-bouncy + stiffness medium-low) en lugar de un tween — así
+ *     se asienta con un sutil rebote en lugar de cortarse seco.
+ *   - El destino que se va se desliza un cuarto de pantalla a la
+ *     izquierda (parallax típico de iOS) con fade simultáneo.
+ *   - El fade y el scale (sutil, 0.97 → 1.0) usan tween corto
+ *     (220 ms) para que el deslizamiento no se vea entrecortado al
+ *     comienzo.
+ *
+ * Centralizo los specs en estas funciones para que todas las
+ * pantallas se vean consistentes.
+ */
+private fun slideSpring() = spring<androidx.compose.ui.unit.IntOffset>(
+    dampingRatio = Spring.DampingRatioLowBouncy,
+    stiffness = Spring.StiffnessMediumLow,
+)
+
+private fun scaleSpring() = spring<Float>(
+    dampingRatio = Spring.DampingRatioLowBouncy,
+    stiffness = Spring.StiffnessMediumLow,
+)
+
+private fun fadeSpec() = tween<Float>(durationMillis = 220)
 
 @Composable
 fun AppNav() {
@@ -50,31 +74,47 @@ fun AppNav() {
         NavHost(
             navController = nav,
             startDestination = Routes.Home,
+            // Entrada del destino nuevo: slide desde la derecha con
+            // spring + fade + scale sutil. El scale agrega esa
+            // sensación de "modal" que tiene iOS al abrir una nota.
             enterTransition = {
                 slideInHorizontally(
-                    animationSpec = tween(NAV_DURATION_MS, easing = FastOutSlowInEasing),
+                    animationSpec = slideSpring(),
                     initialOffsetX = { it },
-                )
+                ) + fadeIn(animationSpec = fadeSpec()) +
+                    scaleIn(
+                        animationSpec = scaleSpring(),
+                        initialScale = 0.97f,
+                    )
             },
+            // El de origen se va parallax (un cuarto a la izquierda)
+            // + fade-out sutil. Mismo spring que la entrada para que
+            // el movimiento se sienta acoplado.
             exitTransition = {
-                fadeOut(tween(NAV_EXIT_DURATION_MS, easing = FastOutSlowInEasing)) +
-                    slideOutHorizontally(
-                        animationSpec = tween(NAV_DURATION_MS, easing = FastOutSlowInEasing),
-                        targetOffsetX = { -it / 4 },
-                    )
+                slideOutHorizontally(
+                    animationSpec = slideSpring(),
+                    targetOffsetX = { -it / 4 },
+                ) + fadeOut(animationSpec = fadeSpec())
             },
+            // Pop: el origen vuelve desde la izquierda (parallax
+            // inverso) con el mismo spring.
             popEnterTransition = {
-                fadeIn(tween(NAV_EXIT_DURATION_MS, easing = FastOutSlowInEasing)) +
-                    slideInHorizontally(
-                        animationSpec = tween(NAV_DURATION_MS, easing = FastOutSlowInEasing),
-                        initialOffsetX = { -it / 4 },
-                    )
+                slideInHorizontally(
+                    animationSpec = slideSpring(),
+                    initialOffsetX = { -it / 4 },
+                ) + fadeIn(animationSpec = fadeSpec())
             },
+            // Pop: el destino se va deslizando completo hacia la
+            // derecha + scale-out sutil.
             popExitTransition = {
                 slideOutHorizontally(
-                    animationSpec = tween(NAV_DURATION_MS, easing = FastOutSlowInEasing),
+                    animationSpec = slideSpring(),
                     targetOffsetX = { it },
-                )
+                ) + fadeOut(animationSpec = fadeSpec()) +
+                    scaleOut(
+                        animationSpec = scaleSpring(),
+                        targetScale = 0.97f,
+                    )
             },
         ) {
             composable(Routes.Home) {

@@ -7,8 +7,12 @@ package com.oreoexperience.notes.ui.editor
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -303,11 +307,24 @@ fun EditorScreen(
                 Spacer(Modifier.height(120.dp))
             }
 
-            // Cronómetro inferior
+            // Cronómetro inferior. Slide-up con spring low-bouncy para
+            // que aparezca con un pequeño rebote al asentarse.
             AnimatedVisibility(
                 visible = state.loaded && state.targetDurationSec > 0,
-                enter = fadeIn(),
-                exit = fadeOut(),
+                enter = slideInVertically(
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessMediumLow,
+                    ),
+                    initialOffsetY = { it },
+                ) + fadeIn(),
+                exit = slideOutVertically(
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMediumLow,
+                    ),
+                    targetOffsetY = { it },
+                ) + fadeOut(),
             ) {
                 BottomTimerBar(
                     targetSec = state.targetDurationSec,

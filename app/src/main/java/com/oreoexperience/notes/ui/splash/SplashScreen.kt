@@ -58,11 +58,13 @@ fun SplashScreen(onFinished: () -> Unit) {
     )
 
     var entered by remember { mutableStateOf(false) }
+    // Spring low-bouncy: el ícono entra con un rebote sutil al
+    // asentarse, igual al feeling de los modales iOS.
     val iconScale by animateFloatAsState(
-        targetValue = if (entered) 1f else 0.86f,
+        targetValue = if (entered) 1f else 0.78f,
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessLow,
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessMediumLow,
         ),
         label = "iconScale",
     )
