@@ -7,12 +7,15 @@ import com.oreoexperience.notes.data.DiscursoRepository
 import com.oreoexperience.notes.data.MediaStorage
 import com.oreoexperience.notes.data.NoteBlock
 import com.oreoexperience.notes.data.NoteBlockSerializer
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Estado del editor — modelo basado en **bloques** para soportar
@@ -58,30 +61,49 @@ class EditorViewModel(
     private val _state = MutableStateFlow(EditorUiState())
     val state: StateFlow<EditorUiState> = _state.asStateFlow()
 
-    // Debounced auto-save: cada edición cancela el job anterior y
-    // re-programa un save a los 600ms. Así nunca se pierden cambios
-    // y el indicador refleja el estado real.
-    private var autoSaveJob: Job? = null
-    private var savedFlashJob: Job? = null
+    // ---- AUTO-SAVE ROBUSTO ----
+    //
+    // El esquema anterior (cancel + reschedule en cada tecla) tenía un
+    // problema: si el usuario escribía sin pausar 600ms, el job se
+    // cancelaba indefinidamente y persist() NUNCA se ejecutaba. La nota
+    // podía quedar sin persistir aunque hubiera mucho texto.
+    //
+    // Solución: un Channel(CONFLATED) + un loop único. Cada edición
+    // hace trySend (no bloquea). El consumidor toma la señal, espera un
+    // throttle corto, drena señales acumuladas y llama persist(). Así
+    // un usuario que escribe sin parar dispara un save cada ~250ms y
+    // los datos nunca se pierden.
+    private val saveSignal = Channel<Unit>(capacity = Channel.CONFLATED)
+    private val persistMutex = Mutex()
+    private var savedFlashJob: kotlinx.coroutines.Job? = null
 
-    private fun markDirtyAndSchedule() {
-        _state.value = _state.value.copy(saveStatus = SaveStatus.Dirty)
-        autoSaveJob?.cancel()
-        autoSaveJob = viewModelScope.launch {
-            delay(600)
-            persist()
+    init {
+        viewModelScope.launch {
+            saveSignal.consumeAsFlow().collect {
+                // Throttle: agrupa ráfagas de tecla en un solo save.
+                delay(250)
+                // Drena cualquier señal adicional acumulada durante el delay.
+                while (saveSignal.tryReceive().isSuccess) { /* drain */ }
+                persist()
+            }
         }
     }
 
+    private fun markDirty() {
+        // Marcamos el estado y disparamos una señal de save no-bloqueante.
+        _state.value = _state.value.copy(saveStatus = SaveStatus.Dirty)
+        saveSignal.trySend(Unit)
+    }
+
     /**
-     * Persiste el estado actual (auto-save). No cambia el id si la
-     * nota está vacía; en ese caso no creamos un registro fantasma.
+     * Persiste el estado actual. Idempotente y protegido por mutex para
+     * evitar dos persist() concurrentes pisando ids.
      */
-    private suspend fun persist() {
+    private suspend fun persist() = persistMutex.withLock {
         val s = _state.value
         if (s.isEmpty) {
-            _state.value = s.copy(saveStatus = SaveStatus.Idle)
-            return
+            _state.value = s.copy(saveStatus = SaveStatus.Idle, isSaving = false)
+            return@withLock
         }
         _state.value = s.copy(saveStatus = SaveStatus.Saving, isSaving = true)
         val body = NoteBlockSerializer.encode(s.blocks)
@@ -98,13 +120,13 @@ class EditorViewModel(
             deletedAt = null,
             createdAt = existing?.createdAt ?: System.currentTimeMillis(),
         )
-        val id = repository.upsert(d)
+        val newId = repository.upsert(d)
         _state.value = _state.value.copy(
-            id = id,
+            id = newId,
             isSaving = false,
             saveStatus = SaveStatus.Saved,
         )
-        // El "Guardado" verde se queda visible 1.5s y vuelve a Idle.
+        // "Guardado" visible 1.5s y vuelve a Idle.
         savedFlashJob?.cancel()
         savedFlashJob = viewModelScope.launch {
             delay(1500)
@@ -114,9 +136,8 @@ class EditorViewModel(
         }
     }
 
-    /** Fuerza un save inmediato (botón "Guardar" explícito). */
+    /** Fuerza un save inmediato (botón "Guardar" explícito o lifecycle). */
     fun saveNow() {
-        autoSaveJob?.cancel()
         viewModelScope.launch { persist() }
     }
 
@@ -163,7 +184,7 @@ class EditorViewModel(
 
     fun setTitle(v: String) {
         _state.value = _state.value.copy(title = v)
-        markDirtyAndSchedule()
+        markDirty()
     }
 
     /** Reemplaza el markdown de un bloque de texto identificado por [id]. */
@@ -173,7 +194,7 @@ class EditorViewModel(
                 if (b is NoteBlock.Text && b.id == id) b.copy(markdown = markdown) else b
             },
         )
-        markDirtyAndSchedule()
+        markDirty()
     }
 
     /**
@@ -266,16 +287,10 @@ class EditorViewModel(
     }
 
     /**
-     * Guarda la nota y devuelve el id. Si la nota está completamente
-     * vacía y es nueva, no la persiste y devuelve 0L. Si era una nota
-     * existente y queda vacía, la elimina.
-     *
-     * Usado por los flujos que cierran el editor (back, "Listo",
-     * swipe-back). Cancela cualquier auto-save pendiente para evitar
-     * un escribir-y-borrar.
+     * Guarda y cierra. Si la nota quedó vacía, la elimina (caso back
+     * sobre una nota nueva sin contenido).
      */
-    suspend fun save(): Long {
-        autoSaveJob?.cancel()
+    suspend fun save(): Long = persistMutex.withLock {
         val s = _state.value
         if (s.isEmpty) {
             if (s.id != 0L) {
@@ -287,11 +302,10 @@ class EditorViewModel(
                     repository.delete(current)
                 }
             }
-            return 0L
+            return@withLock 0L
         }
         _state.value = s.copy(isSaving = true, saveStatus = SaveStatus.Saving)
         val body = NoteBlockSerializer.encode(s.blocks)
-        // Conservar createdAt si la nota ya existía.
         val existing = if (s.id != 0L) repository.get(s.id) else null
         val d = Discurso(
             id = s.id,
@@ -305,9 +319,9 @@ class EditorViewModel(
             deletedAt = null,
             createdAt = existing?.createdAt ?: System.currentTimeMillis(),
         )
-        val id = repository.upsert(d)
-        _state.value = s.copy(id = id, isSaving = false, saveStatus = SaveStatus.Saved)
-        return id
+        val newId = repository.upsert(d)
+        _state.value = s.copy(id = newId, isSaving = false, saveStatus = SaveStatus.Saved)
+        return@withLock newId
     }
 
     /**

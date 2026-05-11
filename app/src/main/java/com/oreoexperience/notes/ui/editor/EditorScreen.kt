@@ -79,6 +79,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -96,6 +97,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -196,6 +200,23 @@ fun EditorScreen(
     }
     BackHandler {
         scope.launch { saveAndBack() }
+    }
+
+    // Flush en cualquier evento ON_PAUSE — si el usuario manda la app
+    // al background o cierra de cualquier forma, este observer dispara
+    // un save inmediato. Es la red de seguridad final encima del
+    // auto-save que ya corre cada ~250ms.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE) {
+                vm.saveNow()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     // Track activo para que el botón "B/I/U..." opere sobre el bloque
@@ -328,22 +349,16 @@ fun EditorScreen(
                     }
                 }
 
-                // Botón "Guardar" explícito: dispara persist() sin cerrar
-                // el editor. Resaltado en violeta para que sea obvio.
+                // Botón "Guardar" explícito (único CTA en la top bar).
+                // Dispara persist() sin cerrar el editor. El "Listo"
+                // anterior se retiró por pedido del usuario — el back y
+                // el auto-save cubren ese flujo.
                 TextButton(
                     onClick = { vm.saveNow() },
                     enabled = state.saveStatus != SaveStatus.Saving,
                 ) {
                     Text(
                         text = "Guardar",
-                        color = OreoPalette.Accent,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 16.sp,
-                    )
-                }
-                TextButton(onClick = { scope.launch { saveAndBack() } }) {
-                    Text(
-                        text = "Listo",
                         color = OreoPalette.Accent,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 17.sp,
