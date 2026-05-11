@@ -138,14 +138,19 @@ fun HomeScreen(
     val grouped = remember(unpinned) { groupByMonth(unpinned) }
     var pinnedExpanded by remember { mutableStateOf(true) }
 
-    // FAB con press feedback bouncy: al apretar, baja a 0.92 con un
-    // pequeño giro y vuelve con un overshoot, igual que un botón iOS.
+    // FAB con press feedback bouncy + un giro de 12° para que se sienta
+    // que el botón "se inclina" como un sello al apretarlo.
     val fabInteraction = remember { MutableInteractionSource() }
     val fabPressed by fabInteraction.collectIsPressedAsState()
     val fabScale by animateFloatAsState(
-        targetValue = if (fabPressed) 0.92f else 1f,
+        targetValue = if (fabPressed) 0.86f else 1f,
         animationSpec = OreoMotion.SpringBouncy(),
         label = "fabPressScale",
+    )
+    val fabTilt by animateFloatAsState(
+        targetValue = if (fabPressed) -12f else 0f,
+        animationSpec = OreoMotion.SpringBouncy(),
+        label = "fabTilt",
     )
 
     Scaffold(
@@ -157,7 +162,9 @@ fun HomeScreen(
                 shape = CircleShape,
                 containerColor = OreoPalette.Accent,
                 contentColor = Color.White,
-                modifier = Modifier.scale(fabScale),
+                modifier = Modifier
+                    .scale(fabScale)
+                    .rotate(fabTilt),
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Edit,
@@ -454,26 +461,33 @@ private fun GroupedCard(
     onTrash: (Discurso) -> Unit,
     onTogglePin: (Discurso) -> Unit,
 ) {
+    // Cada nota es una tarjeta individual redondeada (estilo cards
+    // separadas) en lugar de filas unidas dentro de un solo rectángulo.
+    // Así el listado deja de leerse "rectangular".
     Column(
         modifier = Modifier
             .padding(horizontal = 12.dp)
-            .clip(RoundedCornerShape(22.dp))
-            .background(
-                color = OreoPalette.SurfaceCard,
-                shape = RoundedCornerShape(22.dp),
-            )
             .animateContentSize(
                 animationSpec = tween(
                     durationMillis = 280,
                     easing = LinearOutSlowInEasing,
                 ),
             ),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        items.forEachIndexed { index, d ->
+        items.forEach { d ->
             // Cada fila se envuelve en SwipeToDeleteRow para soportar
             // el gesto iOS de borrar deslizando.
             SwipeToDeleteRow(onDelete = { onTrash(d) }) {
-                Box(modifier = Modifier.background(OreoPalette.SurfaceCard)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(
+                            color = OreoPalette.SurfaceCard,
+                            shape = RoundedCornerShape(20.dp),
+                        ),
+                ) {
                     NoteRow(
                         d = d,
                         onClick = { onOpen(d.id) },
@@ -481,15 +495,6 @@ private fun GroupedCard(
                         onTrash = { onTrash(d) },
                     )
                 }
-            }
-            if (index < items.lastIndex) {
-                Box(
-                    modifier = Modifier
-                        .padding(start = 18.dp)
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(OreoPalette.OutlineFaint),
-                )
             }
         }
     }
@@ -509,25 +514,34 @@ private fun NoteRow(
     val (preview, thumbName) = remember(d.notes, d.pointsJson) { buildPreviewAndThumb(d) }
     var menuOpen by remember { mutableStateOf(false) }
 
-    // Press feedback: scale 0.97 con spring critically-damped.
+    // Press feedback: scale 0.92 con un highlight overlay que hace
+    // muy obvio el toque (sin esto la anim casi no se veía).
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val pressScale by animateFloatAsState(
-        targetValue = if (pressed) 0.96f else 1f,
+        targetValue = if (pressed) 0.94f else 1f,
         animationSpec = OreoMotion.SpringBouncy(),
         label = "rowPressScale",
+    )
+    val pressHighlight by androidx.compose.animation.animateColorAsState(
+        targetValue = if (pressed) OreoPalette.Accent.copy(alpha = 0.10f)
+        else Color.Transparent,
+        animationSpec = tween(durationMillis = 140, easing = OreoMotion.EaseOut),
+        label = "rowPressHighlight",
     )
 
     Row(
         modifier = Modifier
             .scale(pressScale)
+            .clip(RoundedCornerShape(20.dp))
+            .background(pressHighlight)
             .combinedClickable(
                 interactionSource = interaction,
                 indication = null,
                 onClick = onClick,
                 onLongClick = { menuOpen = true },
             )
-            .padding(horizontal = 18.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {

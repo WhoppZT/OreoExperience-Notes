@@ -40,9 +40,13 @@ object Routes {
     fun editor(id: Long) = "editor/$id"
 }
 
-private fun slideSpec(): FiniteAnimationSpec<IntOffset> = OreoMotion.SpringNav()
+// Slide deliberadamente largo (380ms) con curva emphasized — un spring
+// sin rebote completaba el viaje en menos de 200ms y se sentía
+// "instantáneo". Tween con emphasized da una transición visible.
+private fun slideSpec(): FiniteAnimationSpec<IntOffset> =
+    tween(durationMillis = 380, easing = OreoMotion.EaseEmphasized)
 private fun fadeSpec(): FiniteAnimationSpec<Float> =
-    tween(durationMillis = 220, easing = OreoMotion.EaseEmphasized)
+    tween(durationMillis = 260, easing = OreoMotion.EaseEmphasized)
 
 @Composable
 fun AppNav() {

@@ -11,10 +11,15 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -50,9 +55,12 @@ import androidx.compose.material.icons.outlined.FormatListNumbered
 import androidx.compose.material.icons.outlined.FormatStrikethrough
 import androidx.compose.material.icons.outlined.FormatUnderlined
 import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.CloudDone
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.Title
 import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material3.AlertDialog
@@ -249,6 +257,10 @@ fun EditorScreen(
                         fontSize = 17.sp,
                     )
                 }
+                Spacer(Modifier.width(6.dp))
+                // Indicador de estado de guardado visible al lado del back —
+                // muestra "Sin guardar / Guardando / Guardado".
+                SaveStatusPill(status = state.saveStatus)
                 Spacer(Modifier.weight(1f))
 
                 Box {
@@ -316,6 +328,19 @@ fun EditorScreen(
                     }
                 }
 
+                // Botón "Guardar" explícito: dispara persist() sin cerrar
+                // el editor. Resaltado en violeta para que sea obvio.
+                TextButton(
+                    onClick = { vm.saveNow() },
+                    enabled = state.saveStatus != SaveStatus.Saving,
+                ) {
+                    Text(
+                        text = "Guardar",
+                        color = OreoPalette.Accent,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 16.sp,
+                    )
+                }
                 TextButton(onClick = { scope.launch { saveAndBack() } }) {
                     Text(
                         text = "Listo",
@@ -782,6 +807,90 @@ private fun TimerDurationDialog(
 private fun formatNowDate(): String {
     val sdf = SimpleDateFormat("d 'de' MMMM 'de' yyyy 'a las' HH:mm", Locale("es"))
     return sdf.format(Date())
+}
+
+/**
+ * Píldora animada en la top bar que muestra el estado del auto-save:
+ *  - `Idle`: nada visible.
+ *  - `Dirty`: punto naranja con "Cambios sin guardar".
+ *  - `Saving`: icono Sync con rotación + "Guardando…".
+ *  - `Saved`: check verde con "Guardado" — visible 1.5s.
+ */
+@Composable
+private fun SaveStatusPill(status: SaveStatus) {
+    AnimatedVisibility(
+        visible = status != SaveStatus.Idle,
+        enter = fadeIn(tween(180, easing = OreoMotion.EaseOut)) +
+            slideInVertically(
+                animationSpec = OreoMotion.SpringBouncy(),
+                initialOffsetY = { -it / 2 },
+            ),
+        exit = fadeOut(tween(180, easing = OreoMotion.EaseInOut)) +
+            slideOutVertically(
+                animationSpec = tween(160, easing = OreoMotion.EaseInOut),
+                targetOffsetY = { -it / 2 },
+            ),
+    ) {
+        val (icon, text, tint) = when (status) {
+            SaveStatus.Dirty -> Triple(
+                Icons.Outlined.CloudDone,
+                "Sin guardar",
+                OreoPalette.OnSurfaceFaint,
+            )
+            SaveStatus.Saving -> Triple(
+                Icons.Outlined.Sync,
+                "Guardando",
+                OreoPalette.Accent,
+            )
+            SaveStatus.Saved -> Triple(
+                Icons.Outlined.Check,
+                "Guardado",
+                OreoPalette.Accent,
+            )
+            SaveStatus.Idle -> Triple(
+                Icons.Outlined.Check,
+                "",
+                OreoPalette.OnSurfaceFaint,
+            )
+        }
+        // Rotación continua del icono de sync mientras guarda.
+        val infinite = rememberInfiniteTransition(label = "saving")
+        val rotation: Float by infinite.animateFloat(
+            initialValue = 0f,
+            targetValue = if (status == SaveStatus.Saving) 360f else 0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(900, easing = LinearEasing),
+            ),
+            label = "saveRot",
+        )
+        Row(
+            modifier = Modifier
+                .background(
+                    color = tint.copy(alpha = 0.12f),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(999.dp),
+                )
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier
+                    .size(14.dp)
+                    .let {
+                        if (rotation != 0f) it.rotate(rotation) else it
+                    },
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = text,
+                color = tint,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+    }
 }
 
 /**

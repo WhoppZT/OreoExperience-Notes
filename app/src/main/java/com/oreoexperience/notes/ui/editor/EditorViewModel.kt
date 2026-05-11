@@ -7,6 +7,8 @@ import com.oreoexperience.notes.data.DiscursoRepository
 import com.oreoexperience.notes.data.MediaStorage
 import com.oreoexperience.notes.data.NoteBlock
 import com.oreoexperience.notes.data.NoteBlockSerializer
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,6 +30,9 @@ import kotlinx.coroutines.launch
  * serializan al string markdown extendido (con marcadores de media)
  * que se persiste en `Discurso.notes`.
  */
+/** Estado visible del indicador de guardado en la top bar. */
+enum class SaveStatus { Idle, Dirty, Saving, Saved }
+
 data class EditorUiState(
     val id: Long = 0L,
     val title: String = "",
@@ -36,6 +41,7 @@ data class EditorUiState(
     val pinned: Boolean = false,
     val loaded: Boolean = false,
     val isSaving: Boolean = false,
+    val saveStatus: SaveStatus = SaveStatus.Idle,
 ) {
     val isNew: Boolean get() = id == 0L
     val isEmpty: Boolean
@@ -51,6 +57,68 @@ class EditorViewModel(
 
     private val _state = MutableStateFlow(EditorUiState())
     val state: StateFlow<EditorUiState> = _state.asStateFlow()
+
+    // Debounced auto-save: cada edición cancela el job anterior y
+    // re-programa un save a los 600ms. Así nunca se pierden cambios
+    // y el indicador refleja el estado real.
+    private var autoSaveJob: Job? = null
+    private var savedFlashJob: Job? = null
+
+    private fun markDirtyAndSchedule() {
+        _state.value = _state.value.copy(saveStatus = SaveStatus.Dirty)
+        autoSaveJob?.cancel()
+        autoSaveJob = viewModelScope.launch {
+            delay(600)
+            persist()
+        }
+    }
+
+    /**
+     * Persiste el estado actual (auto-save). No cambia el id si la
+     * nota está vacía; en ese caso no creamos un registro fantasma.
+     */
+    private suspend fun persist() {
+        val s = _state.value
+        if (s.isEmpty) {
+            _state.value = s.copy(saveStatus = SaveStatus.Idle)
+            return
+        }
+        _state.value = s.copy(saveStatus = SaveStatus.Saving, isSaving = true)
+        val body = NoteBlockSerializer.encode(s.blocks)
+        val existing = if (s.id != 0L) repository.get(s.id) else null
+        val d = Discurso(
+            id = s.id,
+            title = s.title.trim(),
+            scriptures = "",
+            tags = "",
+            pointsJson = "[]",
+            notes = body,
+            targetDurationSec = s.targetDurationSec,
+            pinned = s.pinned,
+            deletedAt = null,
+            createdAt = existing?.createdAt ?: System.currentTimeMillis(),
+        )
+        val id = repository.upsert(d)
+        _state.value = _state.value.copy(
+            id = id,
+            isSaving = false,
+            saveStatus = SaveStatus.Saved,
+        )
+        // El "Guardado" verde se queda visible 1.5s y vuelve a Idle.
+        savedFlashJob?.cancel()
+        savedFlashJob = viewModelScope.launch {
+            delay(1500)
+            if (_state.value.saveStatus == SaveStatus.Saved) {
+                _state.value = _state.value.copy(saveStatus = SaveStatus.Idle)
+            }
+        }
+    }
+
+    /** Fuerza un save inmediato (botón "Guardar" explícito). */
+    fun saveNow() {
+        autoSaveJob?.cancel()
+        viewModelScope.launch { persist() }
+    }
 
     fun load(id: Long) {
         if (_state.value.loaded && _state.value.id == id) return
@@ -93,7 +161,10 @@ class EditorViewModel(
             .joinToString("\n\n")
     }
 
-    fun setTitle(v: String) { _state.value = _state.value.copy(title = v) }
+    fun setTitle(v: String) {
+        _state.value = _state.value.copy(title = v)
+        markDirtyAndSchedule()
+    }
 
     /** Reemplaza el markdown de un bloque de texto identificado por [id]. */
     fun updateTextBlock(id: String, markdown: String) {
@@ -102,6 +173,7 @@ class EditorViewModel(
                 if (b is NoteBlock.Text && b.id == id) b.copy(markdown = markdown) else b
             },
         )
+        markDirtyAndSchedule()
     }
 
     /**
@@ -194,11 +266,16 @@ class EditorViewModel(
     }
 
     /**
-     * Guarda la nota. Si la nota está completamente vacía y es nueva,
-     * no la persiste y devuelve 0L. Si era una nota existente y queda
-     * vacía, la elimina.
+     * Guarda la nota y devuelve el id. Si la nota está completamente
+     * vacía y es nueva, no la persiste y devuelve 0L. Si era una nota
+     * existente y queda vacía, la elimina.
+     *
+     * Usado por los flujos que cierran el editor (back, "Listo",
+     * swipe-back). Cancela cualquier auto-save pendiente para evitar
+     * un escribir-y-borrar.
      */
     suspend fun save(): Long {
+        autoSaveJob?.cancel()
         val s = _state.value
         if (s.isEmpty) {
             if (s.id != 0L) {
@@ -212,7 +289,7 @@ class EditorViewModel(
             }
             return 0L
         }
-        _state.value = s.copy(isSaving = true)
+        _state.value = s.copy(isSaving = true, saveStatus = SaveStatus.Saving)
         val body = NoteBlockSerializer.encode(s.blocks)
         // Conservar createdAt si la nota ya existía.
         val existing = if (s.id != 0L) repository.get(s.id) else null
@@ -229,7 +306,7 @@ class EditorViewModel(
             createdAt = existing?.createdAt ?: System.currentTimeMillis(),
         )
         val id = repository.upsert(d)
-        _state.value = s.copy(id = id, isSaving = false)
+        _state.value = s.copy(id = id, isSaving = false, saveStatus = SaveStatus.Saved)
         return id
     }
 
