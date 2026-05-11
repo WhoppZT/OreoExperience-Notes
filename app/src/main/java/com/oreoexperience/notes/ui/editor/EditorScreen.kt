@@ -80,6 +80,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -195,7 +196,7 @@ fun EditorScreen(
     }
 
     suspend fun saveAndBack() {
-        val newId = vm.save()
+        val newId = vm.saveBlocking()
         onSaved(newId)
     }
     BackHandler {
@@ -296,28 +297,30 @@ fun EditorScreen(
                         expanded = menuOpen,
                         onDismissRequest = { menuOpen = false },
                     ) {
-                        if (!state.isNew) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text(if (state.pinned) "Quitar fijado" else "Fijar al tope")
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Outlined.PushPin, null)
-                                },
-                                onClick = {
-                                    menuOpen = false
-                                    vm.togglePin()
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Compartir") },
-                                leadingIcon = { Icon(Icons.Outlined.Share, null) },
-                                onClick = {
-                                    menuOpen = false
-                                    shareEditorState(context = ctxLocal, vmState = state)
-                                },
-                            )
-                        }
+                        // Cada nota se persiste apenas se abre el editor,
+                        // así que las acciones del menú (pin, compartir,
+                        // eliminar) están siempre disponibles — no hay
+                        // distinción "nueva vs guardada".
+                        DropdownMenuItem(
+                            text = {
+                                Text(if (state.pinned) "Quitar fijado" else "Fijar al tope")
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Outlined.PushPin, null)
+                            },
+                            onClick = {
+                                menuOpen = false
+                                vm.togglePin()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Compartir") },
+                            leadingIcon = { Icon(Icons.Outlined.Share, null) },
+                            onClick = {
+                                menuOpen = false
+                                shareEditorState(context = ctxLocal, vmState = state)
+                            },
+                        )
                         DropdownMenuItem(
                             text = { Text("Establecer cronómetro") },
                             onClick = {
@@ -325,27 +328,25 @@ fun EditorScreen(
                                 showTimerDialog = true
                             },
                         )
-                        if (!state.isNew) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        "Eliminar nota",
-                                        color = OreoPalette.DangerFill,
-                                    )
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Outlined.Delete,
-                                        null,
-                                        tint = OreoPalette.DangerFill,
-                                    )
-                                },
-                                onClick = {
-                                    menuOpen = false
-                                    showDelete = true
-                                },
-                            )
-                        }
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    "Eliminar nota",
+                                    color = OreoPalette.DangerFill,
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Outlined.Delete,
+                                    null,
+                                    tint = OreoPalette.DangerFill,
+                                )
+                            },
+                            onClick = {
+                                menuOpen = false
+                                showDelete = true
+                            },
+                        )
                     }
                 }
 
@@ -535,6 +536,13 @@ private fun TextBlockEditor(
     onFocused: (RichTextState, Int) -> Unit,
 ) {
     val richState = rememberRichTextState()
+    // Mantenemos el callback siempre actualizado — sin esto el
+    // LaunchedEffect(richState) capturaba el `onMarkdownChange`
+    // inicial y nunca lo refrescaba. Cuando el VM reemplazaba el
+    // bloque por otro con UUID nuevo (caso load() que reasigna
+    // state.blocks), el callback seguía llamando a updateTextBlock
+    // con el UUID viejo → nada matcheaba → nada se guardaba.
+    val currentOnChange by rememberUpdatedState(onMarkdownChange)
     LaunchedEffect(block.id) {
         if (richState.toMarkdown() != initialMarkdown) {
             richState.setMarkdown(initialMarkdown)
@@ -544,7 +552,7 @@ private fun TextBlockEditor(
         snapshotFlow { richState.annotatedString }
             .drop(1)
             .distinctUntilChanged()
-            .collect { onMarkdownChange(richState.toMarkdown()) }
+            .collect { currentOnChange(richState.toMarkdown()) }
     }
     // Re-emitir foco cuando cambia el cursor para que el insertor de
     // media tenga la posición actualizada.
