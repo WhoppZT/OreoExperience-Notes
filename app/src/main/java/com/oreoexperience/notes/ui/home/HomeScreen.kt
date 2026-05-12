@@ -50,6 +50,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Sort
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ExpandMore
@@ -989,204 +990,166 @@ private fun CategoryTabs(
     onTab: (HomeTab) -> Unit,
     onServicio: () -> Unit,
 ) {
-    val tabs = remember { HomeTab.values().toList() }
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    val scrollState = rememberScrollState()
-
-    // Posiciones (x, w) en dp de cada tab principal. Indexado por enum.
-    val tabRects = remember { mutableStateMapOf<HomeTab, Pair<androidx.compose.ui.unit.Dp, androidx.compose.ui.unit.Dp>>() }
-
-    val target = tabRects[activeTab]
-    val targetX = target?.first ?: 0.dp
-    val targetW = target?.second ?: 0.dp
-
-    val animX by androidx.compose.animation.core.animateDpAsState(
-        targetValue = targetX,
-        animationSpec = androidx.compose.animation.core.spring(
-            dampingRatio = 0.78f,
-            stiffness = 340f,
-        ),
-        label = "tabPillX",
+    var menuOpen by remember { mutableStateOf(false) }
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (pressed) 0.96f else 1f,
+        animationSpec = OreoMotion.SpringBouncy(),
+        label = "selectorPressScale",
     )
-    val animW by androidx.compose.animation.core.animateDpAsState(
-        targetValue = targetW,
-        animationSpec = androidx.compose.animation.core.spring(
-            dampingRatio = 0.78f,
-            stiffness = 340f,
+    val rotation by animateFloatAsState(
+        targetValue = if (menuOpen) 180f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(
+            durationMillis = 220,
+            easing = OreoMotion.EaseOut,
         ),
-        label = "tabPillW",
+        label = "selectorChevron",
     )
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp),
+            .padding(horizontal = 18.dp, vertical = 6.dp),
     ) {
-        Box(
+        Row(
             modifier = Modifier
-                .horizontalScroll(scrollState)
-                .padding(horizontal = 18.dp),
+                .scale(pressScale)
+                .height(40.dp)
+                .clip(RoundedCornerShape(22.dp))
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(OreoPalette.Accent, OreoPalette.AccentSub),
+                    ),
+                )
+                .combinedClickable(
+                    interactionSource = interaction,
+                    indication = null,
+                    onClick = { menuOpen = true },
+                    onLongClick = { menuOpen = true },
+                )
+                .padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            // Pill viajera detrás de los labels — gradiente Accent →
-            // AccentSub + halo suave para sensación de profundidad.
-            if (targetW > 0.dp) {
-                Box(
-                    modifier = Modifier
-                        .offset(x = animX)
-                        .size(width = animW, height = 38.dp)
-                        .background(
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(
-                                    OreoPalette.Accent,
-                                    OreoPalette.AccentSub,
-                                ),
-                            ),
-                            shape = RoundedCornerShape(20.dp),
-                        ),
+            Icon(
+                imageVector = activeTab.icon,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = activeTab.label,
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Icon(
+                imageVector = Icons.Outlined.ExpandMore,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier
+                    .size(18.dp)
+                    .rotate(rotation),
+            )
+        }
+
+        DropdownMenu(
+            expanded = menuOpen,
+            onDismissRequest = { menuOpen = false },
+            offset = androidx.compose.ui.unit.DpOffset(x = 0.dp, y = 6.dp),
+            modifier = Modifier
+                .background(
+                    color = OreoPalette.SurfaceCard,
+                    shape = RoundedCornerShape(20.dp),
+                )
+                .padding(vertical = 4.dp),
+        ) {
+            HomeTab.values().forEach { tab ->
+                val active = tab == activeTab
+                DropdownMenuItem(
+                    modifier = Modifier.padding(horizontal = 6.dp),
+                    leadingIcon = {
+                        Icon(
+                            imageVector = tab.icon,
+                            contentDescription = null,
+                            tint = if (active) OreoPalette.Accent else OreoPalette.OnSurfaceMuted,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = tab.label,
+                            color = if (active) OreoPalette.Accent else OreoPalette.OnSurface,
+                            fontSize = 15.sp,
+                            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
+                        )
+                    },
+                    trailingIcon = if (active) {
+                        {
+                            Icon(
+                                imageVector = Icons.Outlined.Check,
+                                contentDescription = null,
+                                tint = OreoPalette.Accent,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    } else null,
+                    onClick = {
+                        onTab(tab)
+                        menuOpen = false
+                    },
                 )
             }
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                tabs.forEach { tab ->
-                    val active = tab == activeTab
-                    CategoryTabChip(
-                        label = tab.label,
-                        icon = tab.icon,
-                        active = active,
-                        onClick = { onTab(tab) },
-                        modifier = Modifier.onGloballyPositioned { coords ->
-                            val xDp = with(density) { coords.positionInParent().x.toDp() }
-                            val wDp = with(density) { coords.size.width.toDp() }
-                            val previous = tabRects[tab]
-                            if (previous?.first != xDp || previous.second != wDp) {
-                                tabRects[tab] = xDp to wDp
-                            }
-                        },
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 14.dp, vertical = 4.dp)
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(OreoPalette.Outline.copy(alpha = 0.35f)),
+            )
+            DropdownMenuItem(
+                modifier = Modifier.padding(horizontal = 6.dp),
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Outlined.Public,
+                        contentDescription = null,
+                        tint = OreoPalette.AccentSub,
+                        modifier = Modifier.size(20.dp),
                     )
-                }
-                // Servicio del Campo: chip "shortcut" con accent dot —
-                // navega en vez de filtrar la lista.
-                ServicioTabChip(onClick = onServicio)
-            }
+                },
+                text = {
+                    Text(
+                        text = "Servicio del Campo",
+                        color = OreoPalette.AccentSub,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                },
+                trailingIcon = {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(OreoPalette.AccentSub, CircleShape),
+                    )
+                },
+                onClick = {
+                    onServicio()
+                    menuOpen = false
+                },
+            )
         }
+
         // Hairline divisor inferior — refuerza la jerarquía visual
-        // entre la fila de categorías y la lista de notas.
+        // entre el selector de categorías y la lista de notas.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(1.dp)
-                .padding(horizontal = 18.dp)
                 .align(Alignment.BottomCenter)
                 .background(OreoPalette.OutlineFaint),
         )
     }
 }
 
-/**
- * Tab chip principal con icono + label. El fondo de la pill activa
- * se dibuja por separado (la pill que viaja); este Box solo
- * renderiza contenido + ajusta color del texto según el estado.
- */
-@Composable
-private fun CategoryTabChip(
-    label: String,
-    icon: ImageVector?,
-    active: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(
-        targetValue = if (pressed) 0.95f else 1f,
-        animationSpec = OreoMotion.SpringBouncy(),
-        label = "tabPressScale",
-    )
-    Row(
-        modifier = modifier
-            .scale(pressScale)
-            .height(38.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .combinedClickable(
-                interactionSource = interaction,
-                indication = null,
-                onClick = onClick,
-                onLongClick = onClick,
-            )
-            .padding(horizontal = 14.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (icon != null) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (active) Color.White else OreoPalette.OnSurfaceMuted,
-                modifier = Modifier.size(16.dp),
-            )
-        }
-        Text(
-            text = label,
-            color = if (active) Color.White else OreoPalette.OnSurfaceMuted,
-            fontSize = 13.sp,
-            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
-        )
-    }
-}
 
-/**
- * Chip de "Servicio del Campo": vive en la misma fila que las
- * categorías pero navega en lugar de filtrar. El accent dot lo
- * distingue como atajo a una pantalla aparte.
- */
-@Composable
-private fun ServicioTabChip(onClick: () -> Unit) {
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(
-        targetValue = if (pressed) 0.95f else 1f,
-        animationSpec = OreoMotion.SpringBouncy(),
-        label = "servicioPressScale",
-    )
-    Row(
-        modifier = Modifier
-            .scale(pressScale)
-            .height(38.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(OreoPalette.SurfaceCard)
-            .border(
-                width = 1.dp,
-                color = OreoPalette.AccentSub.copy(alpha = 0.45f),
-                shape = RoundedCornerShape(20.dp),
-            )
-            .combinedClickable(
-                interactionSource = interaction,
-                indication = null,
-                onClick = onClick,
-                onLongClick = onClick,
-            )
-            .padding(horizontal = 14.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = Icons.Outlined.Public,
-            contentDescription = null,
-            tint = OreoPalette.AccentSub,
-            modifier = Modifier.size(16.dp),
-        )
-        Text(
-            text = "Servicio del Campo",
-            color = OreoPalette.OnSurface,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-        )
-        Box(
-            modifier = Modifier
-                .size(7.dp)
-                .background(OreoPalette.AccentSub, CircleShape),
-        )
-    }
-}

@@ -24,7 +24,12 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -57,6 +62,7 @@ import androidx.compose.material.icons.outlined.FormatUnderlined
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CloudDone
+import androidx.compose.material.icons.outlined.BorderColor
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Sync
@@ -96,6 +102,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -606,14 +613,11 @@ private fun FormatToolbar(
             VerticalDivider()
             ToolbarButton(
                 icon = Icons.Outlined.Title,
-                description = "Encabezado",
-                active = activeState?.currentSpanStyle?.fontSize == 22.sp,
-                onClick = {
-                    activeState?.toggleSpanStyle(
-                        SpanStyle(fontSize = 22.sp, fontWeight = FontWeight.Bold),
-                    )
-                },
+                description = "Tamaño de letra (x1 → x2 → x3 → x4 → x1)",
+                active = currentFontLevel(activeState) > 0,
+                onClick = { cycleFontSize(activeState) },
             )
+            HighlightToolbarButton(activeState = activeState)
             ToolbarButton(
                 icon = Icons.AutoMirrored.Outlined.FormatListBulleted,
                 description = "Lista",
@@ -920,7 +924,7 @@ private fun EditorOreoMenu(
                 onSurface = OreoPalette.OnSurface,
             ),
             shapes = androidx.compose.material3.MaterialTheme.shapes.copy(
-                extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
+                extraSmall = RoundedCornerShape(18.dp),
             ),
         ) {
             DropdownMenu(
@@ -930,7 +934,7 @@ private fun EditorOreoMenu(
                 modifier = Modifier
                     .background(
                         color = OreoPalette.SurfaceCard,
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
+                        shape = RoundedCornerShape(18.dp),
                     )
                     .padding(vertical = 4.dp),
             ) {
@@ -996,4 +1000,168 @@ private fun OreoMenuItem(
         },
         onClick = onClick,
     )
+}
+
+// ---------------------------------------------------------------------------
+// Toolbar helpers: tamaño de letra cíclico + resaltado de colores
+// ---------------------------------------------------------------------------
+
+/**
+ * Niveles de tamaño de letra que cicla el botón "T" del toolbar.
+ * Index 0 = "x1" = sin SpanStyle (tamaño por defecto del bloque, 17 sp).
+ * Los siguientes niveles aplican un fontSize explícito vía SpanStyle.
+ */
+private val FONT_LEVELS_SP = listOf(17.sp, 22.sp, 28.sp, 34.sp)
+
+/**
+ * Devuelve el índice del nivel actual de tamaño de letra (0..3) leyendo
+ * `currentSpanStyle.fontSize`. 0 = default; 1..3 = x2/x3/x4. Si el span
+ * tiene un fontSize que no coincide con ninguno de los niveles, lo
+ * tratamos como "default" para no romper la cycle.
+ */
+private fun currentFontLevel(state: RichTextState?): Int {
+    val size = state?.currentSpanStyle?.fontSize ?: return 0
+    if (size == TextUnit.Unspecified) return 0
+    val idx = FONT_LEVELS_SP.indexOf(size)
+    return if (idx < 0) 0 else idx
+}
+
+/**
+ * Cicla el tamaño de letra: x1 → x2 → x3 → x4 → x1.
+ * Quita el span de tamaño actual (si lo hubiese) y aplica el siguiente.
+ */
+private fun cycleFontSize(state: RichTextState?) {
+    val s = state ?: return
+    val cur = currentFontLevel(s)
+    val next = (cur + 1) % FONT_LEVELS_SP.size
+    // Quitar el tamaño actual (solo si no es default).
+    if (cur > 0) {
+        s.removeSpanStyle(SpanStyle(fontSize = FONT_LEVELS_SP[cur]))
+    }
+    // Aplicar el siguiente (solo si no es default).
+    if (next > 0) {
+        s.addSpanStyle(SpanStyle(fontSize = FONT_LEVELS_SP[next]))
+    }
+}
+
+/** Paleta de resaltado — violeta Aurora, amarillo cálido, verde menta. */
+private val HIGHLIGHT_COLORS = listOf(
+    Color(0xFF9333EA) to "Violeta",
+    Color(0xFFFACC15) to "Amarillo",
+    Color(0xFF22C55E) to "Verde",
+)
+
+/**
+ * Botón "resaltador" del toolbar: muestra un icono de marcador y, al
+ * tocarlo, abre un popup pequeño con 3 colores (violeta / amarillo /
+ * verde) más un swatch tachado para quitar el resaltado actual.
+ *
+ * El resaltado se persiste como `SpanStyle(background = color)` sobre
+ * la selección. Si ya hay un background, primero se quita para no
+ * acumular spans solapados.
+ */
+@Composable
+private fun HighlightToolbarButton(activeState: RichTextState?) {
+    var open by remember { mutableStateOf(false) }
+    val currentBg = activeState?.currentSpanStyle?.background ?: Color.Unspecified
+    val hasHighlight = currentBg != Color.Unspecified && currentBg != Color.Transparent
+    Box {
+        ToolbarButton(
+            icon = Icons.Outlined.BorderColor,
+            description = "Resaltar texto",
+            active = hasHighlight,
+            tintActive = if (hasHighlight) currentBg else OreoPalette.Accent,
+            onClick = { open = !open },
+        )
+        DropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+            offset = androidx.compose.ui.unit.DpOffset(x = 0.dp, y = (-8).dp),
+            modifier = Modifier
+                .background(
+                    color = OreoPalette.SurfaceCard,
+                    shape = RoundedCornerShape(18.dp),
+                ),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                HIGHLIGHT_COLORS.forEach { (color, label) ->
+                    HighlightSwatch(
+                        color = color,
+                        label = label,
+                        selected = hasHighlight && currentBg == color,
+                        onClick = {
+                            applyHighlight(activeState, color)
+                            open = false
+                        },
+                    )
+                }
+                HighlightSwatch(
+                    color = Color.Transparent,
+                    label = "Quitar",
+                    selected = false,
+                    isClear = true,
+                    onClick = {
+                        clearHighlight(activeState)
+                        open = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HighlightSwatch(
+    color: Color,
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    isClear: Boolean = false,
+) {
+    Box(
+        modifier = Modifier
+            .size(34.dp)
+            .clip(CircleShape)
+            .background(
+                color = if (isClear) OreoPalette.SurfaceCardHi else color,
+                shape = CircleShape,
+            )
+            .border(
+                width = if (selected) 2.dp else 1.dp,
+                color = if (selected) OreoPalette.OnSurface else OreoPalette.Outline,
+                shape = CircleShape,
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (isClear) {
+            Icon(
+                imageVector = Icons.Outlined.Delete,
+                contentDescription = label,
+                tint = OreoPalette.OnSurfaceMuted,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+    }
+}
+
+private fun applyHighlight(state: RichTextState?, color: Color) {
+    val s = state ?: return
+    val current = s.currentSpanStyle.background
+    if (current != Color.Unspecified && current != Color.Transparent) {
+        s.removeSpanStyle(SpanStyle(background = current))
+    }
+    s.addSpanStyle(SpanStyle(background = color))
+}
+
+private fun clearHighlight(state: RichTextState?) {
+    val s = state ?: return
+    val current = s.currentSpanStyle.background
+    if (current != Color.Unspecified && current != Color.Transparent) {
+        s.removeSpanStyle(SpanStyle(background = current))
+    }
 }
