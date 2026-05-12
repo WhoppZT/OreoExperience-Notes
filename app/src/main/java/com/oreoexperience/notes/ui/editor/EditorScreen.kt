@@ -464,6 +464,7 @@ fun EditorScreen(
             ) {
                 BottomTimerBar(
                     targetSec = state.targetDurationSec,
+                    onClose = { vm.setTargetMinutes(0) },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -494,6 +495,10 @@ fun EditorScreen(
                 onDismiss = { showTimerDialog = false },
                 onConfirm = { minutes ->
                     vm.setTargetMinutes(minutes)
+                    showTimerDialog = false
+                },
+                onClear = {
+                    vm.setTargetMinutes(0)
                     showTimerDialog = false
                 },
             )
@@ -770,6 +775,7 @@ private fun TimerDurationDialog(
     initialMinutes: Int,
     onDismiss: () -> Unit,
     onConfirm: (Int) -> Unit,
+    onClear: () -> Unit,
 ) {
     var text by remember { mutableStateOf(if (initialMinutes > 0) initialMinutes.toString() else "") }
     AlertDialog(
@@ -778,7 +784,7 @@ private fun TimerDurationDialog(
         text = {
             Column {
                 Text(
-                    text = "Duración objetivo en minutos. Dejá vacío o 0 para ocultar la barra.",
+                    text = "Duración objetivo en minutos. Si la nota ya tiene cronómetro y querés sacarlo, tocá \"Eliminar\".",
                     color = OreoPalette.OnSurfaceMuted,
                 )
                 Spacer(Modifier.height(12.dp))
@@ -821,8 +827,15 @@ private fun TimerDurationDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancelar", color = OreoPalette.OnSurfaceMuted)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (initialMinutes > 0) {
+                    TextButton(onClick = onClear) {
+                        Text("Eliminar", color = OreoPalette.DangerFill)
+                    }
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Cancelar", color = OreoPalette.OnSurfaceMuted)
+                }
             }
         },
         containerColor = OreoPalette.SurfaceCard,

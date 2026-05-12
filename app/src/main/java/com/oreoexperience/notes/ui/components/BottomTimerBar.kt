@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.RestartAlt
@@ -71,6 +72,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun BottomTimerBar(
     targetSec: Int,
+    onClose: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     if (targetSec <= 0) return
@@ -195,6 +197,20 @@ fun BottomTimerBar(
                     contentDescription = "Reiniciar",
                     tint = OreoPalette.OnSurfaceMuted,
                     modifier = Modifier.size(20.dp),
+                )
+            }
+
+            // Eliminar el cronómetro de la nota. Pone el target en 0
+            // y oculta la barra. No borra la nota.
+            IconButton(
+                onClick = onClose,
+                modifier = Modifier.size(34.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Close,
+                    contentDescription = "Eliminar cronómetro",
+                    tint = OreoPalette.OnSurfaceMuted,
+                    modifier = Modifier.size(18.dp),
                 )
             }
         }
