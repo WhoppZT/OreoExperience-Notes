@@ -11,10 +11,16 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -22,6 +28,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -48,9 +55,12 @@ import androidx.compose.material.icons.outlined.FormatListNumbered
 import androidx.compose.material.icons.outlined.FormatStrikethrough
 import androidx.compose.material.icons.outlined.FormatUnderlined
 import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.CloudDone
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.Title
 import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material3.AlertDialog
@@ -69,6 +79,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,9 +94,13 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -97,6 +113,7 @@ import com.oreoexperience.notes.data.NoteBlock
 import com.oreoexperience.notes.ui.LocalAppContainer
 import com.oreoexperience.notes.ui.components.BottomTimerBar
 import com.oreoexperience.notes.ui.components.MediaPreview
+import com.oreoexperience.notes.ui.theme.OreoMotion
 import com.oreoexperience.notes.ui.theme.OreoPalette
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
@@ -128,6 +145,7 @@ fun EditorScreen(
     discursoId: Long,
     onBack: () -> Unit,
     onSaved: (Long) -> Unit,
+    initialCategoryKey: String? = null,
 ) {
     val container = LocalAppContainer.current
     val mediaStorage = container.mediaStorage
@@ -136,7 +154,9 @@ fun EditorScreen(
             initializer { EditorViewModel(container.repository, mediaStorage) }
         }
     )
-    LaunchedEffect(discursoId) { vm.load(discursoId) }
+    LaunchedEffect(discursoId, initialCategoryKey) {
+        vm.load(discursoId, initialCategoryKey)
+    }
     val state by vm.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val ctxLocal = LocalContext.current
@@ -179,11 +199,28 @@ fun EditorScreen(
     }
 
     suspend fun saveAndBack() {
-        val newId = vm.save()
+        val newId = vm.saveBlocking()
         onSaved(newId)
     }
     BackHandler {
         scope.launch { saveAndBack() }
+    }
+
+    // Flush en cualquier evento ON_PAUSE — si el usuario manda la app
+    // al background o cierra de cualquier forma, este observer dispara
+    // un save inmediato. Es la red de seguridad final encima del
+    // auto-save que ya corre cada ~250ms.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE) {
+                vm.saveNow()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     // Track activo para que el botón "B/I/U..." opere sobre el bloque
@@ -245,6 +282,10 @@ fun EditorScreen(
                         fontSize = 17.sp,
                     )
                 }
+                Spacer(Modifier.width(6.dp))
+                // Indicador de estado de guardado visible al lado del back —
+                // muestra "Sin guardar / Guardando / Guardado".
+                SaveStatusPill(status = state.saveStatus)
                 Spacer(Modifier.weight(1f))
 
                 Box {
@@ -259,28 +300,30 @@ fun EditorScreen(
                         expanded = menuOpen,
                         onDismissRequest = { menuOpen = false },
                     ) {
-                        if (!state.isNew) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text(if (state.pinned) "Quitar fijado" else "Fijar al tope")
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Outlined.PushPin, null)
-                                },
-                                onClick = {
-                                    menuOpen = false
-                                    vm.togglePin()
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Compartir") },
-                                leadingIcon = { Icon(Icons.Outlined.Share, null) },
-                                onClick = {
-                                    menuOpen = false
-                                    shareEditorState(context = ctxLocal, vmState = state)
-                                },
-                            )
-                        }
+                        // Cada nota se persiste apenas se abre el editor,
+                        // así que las acciones del menú (pin, compartir,
+                        // eliminar) están siempre disponibles — no hay
+                        // distinción "nueva vs guardada".
+                        DropdownMenuItem(
+                            text = {
+                                Text(if (state.pinned) "Quitar fijado" else "Fijar al tope")
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Outlined.PushPin, null)
+                            },
+                            onClick = {
+                                menuOpen = false
+                                vm.togglePin()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Compartir") },
+                            leadingIcon = { Icon(Icons.Outlined.Share, null) },
+                            onClick = {
+                                menuOpen = false
+                                shareEditorState(context = ctxLocal, vmState = state)
+                            },
+                        )
                         DropdownMenuItem(
                             text = { Text("Establecer cronómetro") },
                             onClick = {
@@ -288,33 +331,38 @@ fun EditorScreen(
                                 showTimerDialog = true
                             },
                         )
-                        if (!state.isNew) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        "Eliminar nota",
-                                        color = OreoPalette.DangerFill,
-                                    )
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Outlined.Delete,
-                                        null,
-                                        tint = OreoPalette.DangerFill,
-                                    )
-                                },
-                                onClick = {
-                                    menuOpen = false
-                                    showDelete = true
-                                },
-                            )
-                        }
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    "Eliminar nota",
+                                    color = OreoPalette.DangerFill,
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Outlined.Delete,
+                                    null,
+                                    tint = OreoPalette.DangerFill,
+                                )
+                            },
+                            onClick = {
+                                menuOpen = false
+                                showDelete = true
+                            },
+                        )
                     }
                 }
 
-                TextButton(onClick = { scope.launch { saveAndBack() } }) {
+                // Botón "Guardar" explícito (único CTA en la top bar).
+                // Dispara persist() sin cerrar el editor. El "Listo"
+                // anterior se retiró por pedido del usuario — el back y
+                // el auto-save cubren ese flujo.
+                TextButton(
+                    onClick = { vm.saveNow() },
+                    enabled = state.saveStatus != SaveStatus.Saving,
+                ) {
                     Text(
-                        text = "Listo",
+                        text = "Guardar",
                         color = OreoPalette.Accent,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 17.sp,
@@ -398,23 +446,16 @@ fun EditorScreen(
                 Spacer(Modifier.height(120.dp))
             }
 
-            // Cronómetro inferior con slide-up + spring.
             AnimatedVisibility(
                 visible = state.loaded && state.targetDurationSec > 0,
                 enter = slideInVertically(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessMediumLow,
-                    ),
-                    initialOffsetY = { it },
-                ) + fadeIn(),
+                    animationSpec = tween(320, easing = OreoMotion.EaseOut),
+                    initialOffsetY = { it / 2 },
+                ) + fadeIn(tween(180, easing = OreoMotion.EaseOut)),
                 exit = slideOutVertically(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMediumLow,
-                    ),
+                    animationSpec = tween(240, easing = OreoMotion.EaseInOut),
                     targetOffsetY = { it },
-                ) + fadeOut(),
+                ) + fadeOut(tween(140, easing = OreoMotion.EaseInOut)),
             ) {
                 BottomTimerBar(
                     targetSec = state.targetDurationSec,
@@ -477,6 +518,7 @@ fun EditorScreen(
                 containerColor = OreoPalette.SurfaceCard,
                 titleContentColor = OreoPalette.OnSurface,
                 textContentColor = OreoPalette.OnSurfaceMuted,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
             )
         }
     }
@@ -497,6 +539,13 @@ private fun TextBlockEditor(
     onFocused: (RichTextState, Int) -> Unit,
 ) {
     val richState = rememberRichTextState()
+    // Mantenemos el callback siempre actualizado — sin esto el
+    // LaunchedEffect(richState) capturaba el `onMarkdownChange`
+    // inicial y nunca lo refrescaba. Cuando el VM reemplazaba el
+    // bloque por otro con UUID nuevo (caso load() que reasigna
+    // state.blocks), el callback seguía llamando a updateTextBlock
+    // con el UUID viejo → nada matcheaba → nada se guardaba.
+    val currentOnChange by rememberUpdatedState(onMarkdownChange)
     LaunchedEffect(block.id) {
         if (richState.toMarkdown() != initialMarkdown) {
             richState.setMarkdown(initialMarkdown)
@@ -506,7 +555,7 @@ private fun TextBlockEditor(
         snapshotFlow { richState.annotatedString }
             .drop(1)
             .distinctUntilChanged()
-            .collect { onMarkdownChange(richState.toMarkdown()) }
+            .collect { currentOnChange(richState.toMarkdown()) }
     }
     // Re-emitir foco cuando cambia el cursor para que el insertor de
     // media tenga la posición actualizada.
@@ -528,6 +577,7 @@ private fun TextBlockEditor(
             color = OreoPalette.OnSurface,
             fontSize = 17.sp,
             lineHeight = 24.sp,
+            textAlign = TextAlign.Start,
         ),
         colors = RichTextEditorDefaults.richTextEditorColors(
             focusedIndicatorColor = Color.Transparent,
@@ -543,8 +593,10 @@ private fun TextBlockEditor(
                 text = "Empezá a escribir…",
                 color = OreoPalette.OnSurfaceFaint,
                 fontSize = 17.sp,
+                textAlign = TextAlign.Start,
             )
         },
+        contentPadding = PaddingValues(0.dp),
     )
 }
 
@@ -644,13 +696,59 @@ private fun ToolbarButton(
     onClick: () -> Unit,
     tintActive: Color = OreoPalette.Accent,
 ) {
-    IconButton(onClick = onClick, modifier = Modifier.size(38.dp)) {
-        Icon(
-            imageVector = icon,
-            contentDescription = description,
-            tint = if (active) tintActive else OreoPalette.OnSurfaceMuted,
-            modifier = Modifier.size(20.dp),
+    // El botón del toolbar muestra una píldora redondeada cuando está
+    // activo (estilo iOS Notes). Animamos color de fondo + tint con
+    // springs para que el toggle se sienta vivo.
+    val bgColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (active) tintActive.copy(alpha = 0.20f) else Color.Transparent,
+        animationSpec = androidx.compose.animation.core.tween(
+            durationMillis = 220,
+            easing = OreoMotion.EaseOut,
+        ),
+        label = "toolbarBtnBg",
+    )
+    val tint by androidx.compose.animation.animateColorAsState(
+        targetValue = if (active) tintActive else OreoPalette.OnSurfaceMuted,
+        animationSpec = androidx.compose.animation.core.tween(
+            durationMillis = 220,
+            easing = OreoMotion.EaseOut,
+        ),
+        label = "toolbarBtnTint",
+    )
+    val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (pressed) 0.88f else 1f,
+        animationSpec = OreoMotion.SpringBouncy(),
+        label = "toolbarBtnScale",
+    )
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 2.dp)
+            .size(38.dp)
+            .scale(scale),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .background(
+                    color = bgColor,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                ),
         )
+        IconButton(
+            onClick = onClick,
+            interactionSource = interaction,
+            modifier = Modifier.size(38.dp),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = description,
+                tint = tint,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }
 
@@ -727,12 +825,98 @@ private fun TimerDurationDialog(
         },
         containerColor = OreoPalette.SurfaceCard,
         titleContentColor = OreoPalette.OnSurface,
+        textContentColor = OreoPalette.OnSurfaceMuted,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
     )
 }
 
 private fun formatNowDate(): String {
     val sdf = SimpleDateFormat("d 'de' MMMM 'de' yyyy 'a las' HH:mm", Locale("es"))
     return sdf.format(Date())
+}
+
+/**
+ * Píldora animada en la top bar que muestra el estado del auto-save:
+ *  - `Idle`: nada visible.
+ *  - `Dirty`: punto naranja con "Cambios sin guardar".
+ *  - `Saving`: icono Sync con rotación + "Guardando…".
+ *  - `Saved`: check verde con "Guardado" — visible 1.5s.
+ */
+@Composable
+private fun SaveStatusPill(status: SaveStatus) {
+    AnimatedVisibility(
+        visible = status != SaveStatus.Idle,
+        enter = fadeIn(tween(180, easing = OreoMotion.EaseOut)) +
+            slideInVertically(
+                animationSpec = OreoMotion.SpringBouncy(),
+                initialOffsetY = { -it / 2 },
+            ),
+        exit = fadeOut(tween(180, easing = OreoMotion.EaseInOut)) +
+            slideOutVertically(
+                animationSpec = tween(160, easing = OreoMotion.EaseInOut),
+                targetOffsetY = { -it / 2 },
+            ),
+    ) {
+        val (icon, text, tint) = when (status) {
+            SaveStatus.Dirty -> Triple(
+                Icons.Outlined.CloudDone,
+                "Sin guardar",
+                OreoPalette.OnSurfaceFaint,
+            )
+            SaveStatus.Saving -> Triple(
+                Icons.Outlined.Sync,
+                "Guardando",
+                OreoPalette.Accent,
+            )
+            SaveStatus.Saved -> Triple(
+                Icons.Outlined.Check,
+                "Guardado",
+                OreoPalette.Accent,
+            )
+            SaveStatus.Idle -> Triple(
+                Icons.Outlined.Check,
+                "",
+                OreoPalette.OnSurfaceFaint,
+            )
+        }
+        // Rotación continua del icono de sync mientras guarda.
+        val infinite = rememberInfiniteTransition(label = "saving")
+        val rotation: Float by infinite.animateFloat(
+            initialValue = 0f,
+            targetValue = if (status == SaveStatus.Saving) 360f else 0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(900, easing = LinearEasing),
+            ),
+            label = "saveRot",
+        )
+        Row(
+            modifier = Modifier
+                .background(
+                    color = tint.copy(alpha = 0.12f),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(999.dp),
+                )
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier
+                    .size(14.dp)
+                    .let {
+                        if (rotation != 0f) it.rotate(rotation) else it
+                    },
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = text,
+                color = tint,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+    }
 }
 
 /**

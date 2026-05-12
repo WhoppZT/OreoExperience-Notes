@@ -24,6 +24,33 @@ class UserPreferences(context: Context) {
         get() = prefs.getBoolean(KEY_ONBOARDING_DONE, false)
         set(value) = prefs.edit().putBoolean(KEY_ONBOARDING_DONE, value).apply()
 
+    /** Estado del bloqueo de acceso. Si es false, se muestra la pantalla de credenciales. */
+    val accessUnlockedState: MutableState<Boolean> by lazy {
+        mutableStateOf(prefs.getBoolean(KEY_ACCESS_UNLOCKED, false))
+    }
+    var accessUnlocked: Boolean
+        get() = accessUnlockedState.value
+        set(value) {
+            accessUnlockedState.value = value
+            prefs.edit().putBoolean(KEY_ACCESS_UNLOCKED, value).apply()
+        }
+
+    fun unlockAccess(email: String) {
+        accessUnlockedState.value = true
+        prefs.edit()
+            .putBoolean(KEY_ACCESS_UNLOCKED, true)
+            .putString(KEY_ACCESS_EMAIL, email.trim())
+            .apply()
+    }
+
+    fun lockAccess() {
+        accessUnlockedState.value = false
+        prefs.edit()
+            .putBoolean(KEY_ACCESS_UNLOCKED, false)
+            .remove(KEY_ACCESS_EMAIL)
+            .apply()
+    }
+
     /** Modo de tema preferido. Default = SYSTEM. */
     val themeModeState: MutableState<ThemeMode> by lazy {
         mutableStateOf(
@@ -64,6 +91,8 @@ class UserPreferences(context: Context) {
     companion object {
         private const val PREF_NAME = "oreo_notes_prefs"
         private const val KEY_ONBOARDING_DONE = "onboarding_done"
+        private const val KEY_ACCESS_UNLOCKED = "access_unlocked"
+        private const val KEY_ACCESS_EMAIL = "access_email"
         private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_AUTO_SAVE = "auto_save"
         private const val KEY_SORT_BY = "sort_by"

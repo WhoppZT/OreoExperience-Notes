@@ -72,7 +72,7 @@ fun MediaPreview(
             .fillMaxWidth()
             .heightIn(min = 80.dp, max = 320.dp)
             .padding(vertical = 6.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(18.dp))
             .background(OreoPalette.SurfaceCard)
             .combinedClickable(
                 onClick = { showFull = true },
@@ -157,6 +157,8 @@ fun MediaPreview(
             },
             containerColor = OreoPalette.SurfaceCard,
             titleContentColor = OreoPalette.OnSurface,
+            textContentColor = OreoPalette.OnSurfaceMuted,
+            shape = RoundedCornerShape(28.dp),
         )
     }
 }
@@ -218,8 +220,9 @@ private fun FullScreenMediaPreview(
                 IconButton(
                     onClick = onClose,
                     modifier = Modifier
+                        .size(40.dp)
                         .background(
-                            Color.Black.copy(alpha = 0.45f),
+                            Color.Black.copy(alpha = 0.55f),
                             CircleShape,
                         ),
                 ) {
@@ -227,6 +230,7 @@ private fun FullScreenMediaPreview(
                         imageVector = Icons.Outlined.Close,
                         contentDescription = "Cerrar",
                         tint = Color.White,
+                        modifier = Modifier.size(20.dp),
                     )
                 }
             }

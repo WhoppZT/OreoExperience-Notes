@@ -2,9 +2,8 @@
 
 package com.oreoexperience.notes.ui.onboarding
 
-import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,10 +32,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -46,6 +50,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.oreoexperience.notes.ui.theme.OreoPalette
+import com.oreoexperience.notes.ui.theme.OreoMotion
 import kotlinx.coroutines.launch
 
 /**
@@ -114,19 +119,19 @@ fun OnboardingScreen(onFinish: () -> Unit) {
             ) {
                 repeat(pages.size) { i ->
                     val active = i == pagerState.currentPage
-                    val w by animateFloatAsState(
-                        targetValue = if (active) 22f else 6f,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioLowBouncy,
-                            stiffness = Spring.StiffnessMediumLow,
-                        ),
+                    // Indicador estilo iOS: la "píldora" activa se
+                    // expande con un spring bouncy. Las inactivas se
+                    // mantienen circulares.
+                    val w by animateDpAsState(
+                        targetValue = if (active) 24.dp else 6.dp,
+                        animationSpec = OreoMotion.SpringBouncy(),
                         label = "indicatorW",
                     )
                     Box(
                         modifier = Modifier
                             .padding(horizontal = 4.dp)
                             .height(6.dp)
-                            .width(w.dp)
+                            .width(w)
                             .background(
                                 color = if (active) OreoPalette.Accent
                                 else OreoPalette.OnSurfaceFaint,
@@ -161,7 +166,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                         containerColor = OreoPalette.Accent,
                         contentColor = Color.White,
                     ),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(18.dp),
                 ) {
                     Text(
                         text = if (pagerState.currentPage == pages.lastIndex) "Comenzar"
@@ -210,6 +215,24 @@ private fun onboardingPages(): List<OnboardingPageData> = listOf(
 
 @Composable
 private fun OnboardingPage(data: OnboardingPageData) {
+    // Hero del slide: el ícono entra con un spring bouncy + fade,
+    // dando ese "pop" tipo iOS al deslizar entre páginas.
+    var entered by remember(data) { mutableStateOf(false) }
+    val heroScale by animateFloatAsState(
+        targetValue = if (entered) 1f else 0.78f,
+        animationSpec = OreoMotion.SpringHero(),
+        label = "heroScale",
+    )
+    val heroAlpha by animateFloatAsState(
+        targetValue = if (entered) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(
+            durationMillis = 360,
+            easing = OreoMotion.EaseOut,
+        ),
+        label = "heroAlpha",
+    )
+    LaunchedEffect(data) { entered = true }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -221,12 +244,13 @@ private fun OnboardingPage(data: OnboardingPageData) {
         Box(contentAlignment = Alignment.Center) {
             Box(
                 modifier = Modifier
-                    .size(200.dp)
-                    .scale(1f)
+                    .size(220.dp)
+                    .scale(heroScale)
+                    .alpha(heroAlpha)
                     .background(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                OreoPalette.Accent.copy(alpha = 0.30f),
+                                OreoPalette.Accent.copy(alpha = 0.32f),
                                 OreoPalette.Accent.copy(alpha = 0f),
                             ),
                         ),
@@ -235,7 +259,9 @@ private fun OnboardingPage(data: OnboardingPageData) {
             )
             Box(
                 modifier = Modifier
-                    .size(112.dp)
+                    .size(120.dp)
+                    .scale(heroScale)
+                    .alpha(heroAlpha)
                     .background(
                         brush = Brush.linearGradient(
                             colors = listOf(
@@ -244,7 +270,7 @@ private fun OnboardingPage(data: OnboardingPageData) {
                                 OreoPalette.AccentSub,
                             ),
                         ),
-                        shape = RoundedCornerShape(28.dp),
+                        shape = RoundedCornerShape(32.dp),
                     ),
                 contentAlignment = Alignment.Center,
             ) {
@@ -252,7 +278,7 @@ private fun OnboardingPage(data: OnboardingPageData) {
                     imageVector = data.icon,
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(56.dp),
+                    modifier = Modifier.size(60.dp),
                 )
             }
         }

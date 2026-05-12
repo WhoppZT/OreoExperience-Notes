@@ -3,12 +3,10 @@ package com.oreoexperience.notes.ui.splash
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -38,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.oreoexperience.notes.BuildConfig
+import com.oreoexperience.notes.ui.theme.OreoMotion
 import com.oreoexperience.notes.ui.theme.OreoPalette
 import kotlinx.coroutines.delay
 
@@ -67,17 +66,16 @@ fun SplashScreen(onFinished: () -> Unit) {
     )
 
     var entered by remember { mutableStateOf(false) }
+    // Spring bouncy: el ícono entra con un "pop" elástico, no con
+    // un tween rígido — sensación tipo iOS al desbloquear el iPhone.
     val iconScale by animateFloatAsState(
-        targetValue = if (entered) 1f else 0.78f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioLowBouncy,
-            stiffness = Spring.StiffnessMediumLow,
-        ),
+        targetValue = if (entered) 1f else 0.62f,
+        animationSpec = OreoMotion.SpringHero(),
         label = "iconScale",
     )
     val iconAlpha by animateFloatAsState(
         targetValue = if (entered) 1f else 0f,
-        animationSpec = tween(540, easing = EaseOutCubic),
+        animationSpec = tween(560, easing = EaseOutCubic),
         label = "iconAlpha",
     )
 
@@ -135,7 +133,7 @@ fun SplashScreen(onFinished: () -> Unit) {
                 // Cuadrado del ícono con gradient violeta.
                 Box(
                     modifier = Modifier
-                        .size(96.dp)
+                        .size(104.dp)
                         .scale(iconScale)
                         .alpha(iconAlpha)
                         .background(
@@ -146,7 +144,7 @@ fun SplashScreen(onFinished: () -> Unit) {
                                     OreoPalette.AccentSub,
                                 ),
                             ),
-                            shape = RoundedCornerShape(22.dp),
+                            shape = RoundedCornerShape(28.dp),
                         ),
                     contentAlignment = Alignment.Center,
                 ) {

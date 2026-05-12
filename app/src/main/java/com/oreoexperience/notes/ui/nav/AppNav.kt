@@ -1,12 +1,9 @@
 package com.oreoexperience.notes.ui.nav
 
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
@@ -18,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.IntOffset
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -27,47 +25,30 @@ import com.oreoexperience.notes.ui.LocalAppContainer
 import com.oreoexperience.notes.ui.editor.EditorScreen
 import com.oreoexperience.notes.ui.home.HomeScreen
 import com.oreoexperience.notes.ui.onboarding.OnboardingScreen
+import com.oreoexperience.notes.ui.servicio.ServicioCampoScreen
 import com.oreoexperience.notes.ui.settings.SettingsScreen
 import com.oreoexperience.notes.ui.splash.SplashScreen
+import com.oreoexperience.notes.ui.theme.OreoMotion
 import com.oreoexperience.notes.ui.theme.OreoPalette
 import com.oreoexperience.notes.ui.trash.TrashScreen
 
 object Routes {
     const val Home = "home"
-    const val Editor = "editor/{id}"
+    const val Editor = "editor/{id}?cat={cat}"
     const val Settings = "settings"
     const val Trash = "trash"
-    fun editor(id: Long) = "editor/$id"
+    const val ServicioCampo = "servicio_campo"
+    fun editor(id: Long, category: String? = null): String =
+        if (category == null) "editor/$id?cat=" else "editor/$id?cat=$category"
 }
 
-/**
- * Animaciones de navegación estilo iOS:
- *
- *   - Push horizontal completo desde la derecha con un spring
- *     **críticamente amortiguado** (sin overshoot) y stiffness medio,
- *     que reproduce la curva nativa de UIKit (`spring(response: 0.45,
- *     dampingFraction: 1.0)`).
- *   - El destino que se va se desliza un tercio a la izquierda
- *     (parallax típico de iOS) con fade simultáneo.
- *   - Fade rápido (180 ms con curva fast-out-slow-in) para que la
- *     transición se sienta fluida.
- *   - Scale de entrada sutil (0.985 → 1.0) — apenas perceptible,
- *     suficiente para dar la sensación de "asentar".
- */
-private fun slideSpring() = spring<androidx.compose.ui.unit.IntOffset>(
-    dampingRatio = Spring.DampingRatioNoBouncy,
-    stiffness = 380f,
-)
-
-private fun scaleSpring() = spring<Float>(
-    dampingRatio = Spring.DampingRatioNoBouncy,
-    stiffness = 420f,
-)
-
-private fun fadeSpec() = tween<Float>(
-    durationMillis = 180,
-    easing = androidx.compose.animation.core.FastOutSlowInEasing,
-)
+// Slide deliberadamente largo (380ms) con curva emphasized — un spring
+// sin rebote completaba el viaje en menos de 200ms y se sentía
+// "instantáneo". Tween con emphasized da una transición visible.
+private fun slideSpec(): FiniteAnimationSpec<IntOffset> =
+    tween(durationMillis = 380, easing = OreoMotion.EaseEmphasized)
+private fun fadeSpec(): FiniteAnimationSpec<Float> =
+    tween(durationMillis = 260, easing = OreoMotion.EaseEmphasized)
 
 @Composable
 fun AppNav() {
@@ -77,70 +58,74 @@ fun AppNav() {
     var showOnboarding by remember {
         mutableStateOf(!container.userPreferences.onboardingDone)
     }
+    // El sistema de credenciales fue removido en v0.9.2-jw: la app
+    // entra directo al Home tras el splash. LicenseManager y
+    // AccessScreen siguen existiendo en el repo por si se quiere
+    // restituir el gate más adelante.
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(OreoPalette.Bg0),
     ) {
+        // Push transitions usan slide + fade. La pantalla nueva entra
+        // desde la derecha empujando a la actual; al volver, se invierte.
+        // Las curvas son spring para que se sientan vivas en lugar de
+        // un tween rígido.
         NavHost(
             navController = nav,
             startDestination = Routes.Home,
-            // Push iOS: el destino entra desde la derecha con spring
-            // críticamente amortiguado (sin overshoot) + fade rápido +
-            // scale apenas perceptible.
             enterTransition = {
                 slideInHorizontally(
-                    animationSpec = slideSpring(),
+                    animationSpec = slideSpec(),
                     initialOffsetX = { it },
-                ) + fadeIn(animationSpec = fadeSpec()) +
-                    scaleIn(
-                        animationSpec = scaleSpring(),
-                        initialScale = 0.985f,
-                    )
-            },
-            // El de origen se va con parallax (un tercio a la
-            // izquierda) + fade. Mismo spring que la entrada.
-            exitTransition = {
-                slideOutHorizontally(
-                    animationSpec = slideSpring(),
-                    targetOffsetX = { -it / 3 },
-                ) + fadeOut(animationSpec = fadeSpec())
-            },
-            // Pop: la origen vuelve desde la izquierda (parallax
-            // inverso).
-            popEnterTransition = {
-                slideInHorizontally(
-                    animationSpec = slideSpring(),
-                    initialOffsetX = { -it / 3 },
                 ) + fadeIn(animationSpec = fadeSpec())
             },
-            // Pop: el destino se va deslizando hacia la derecha.
+            exitTransition = {
+                slideOutHorizontally(
+                    animationSpec = slideSpec(),
+                    targetOffsetX = { -it / 4 },
+                ) + fadeOut(animationSpec = fadeSpec())
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    animationSpec = slideSpec(),
+                    initialOffsetX = { -it / 4 },
+                ) + fadeIn(animationSpec = fadeSpec())
+            },
             popExitTransition = {
                 slideOutHorizontally(
-                    animationSpec = slideSpring(),
+                    animationSpec = slideSpec(),
                     targetOffsetX = { it },
-                ) + fadeOut(animationSpec = fadeSpec()) +
-                    scaleOut(
-                        animationSpec = scaleSpring(),
-                        targetScale = 0.985f,
-                    )
+                ) + fadeOut(animationSpec = fadeSpec())
             },
         ) {
             composable(Routes.Home) {
                 HomeScreen(
-                    onNew = { nav.navigate(Routes.editor(0L)) },
+                    onNew = { category ->
+                        nav.navigate(Routes.editor(0L, category))
+                    },
                     onOpen = { id -> nav.navigate(Routes.editor(id)) },
                     onSettings = { nav.navigate(Routes.Settings) },
+                    onOpenServicio = { nav.navigate(Routes.ServicioCampo) },
                 )
             }
             composable(
                 Routes.Editor,
-                arguments = listOf(navArgument("id") { type = NavType.LongType }),
+                arguments = listOf(
+                    navArgument("id") { type = NavType.LongType },
+                    navArgument("cat") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = ""
+                    },
+                ),
             ) { entry ->
                 val id = entry.arguments?.getLong("id") ?: 0L
+                val cat = entry.arguments?.getString("cat").orEmpty()
                 EditorScreen(
                     discursoId = id,
+                    initialCategoryKey = cat.ifBlank { null },
                     onBack = { nav.popBackStack() },
                     onSaved = { _ -> nav.popBackStack() },
                 )
@@ -157,16 +142,16 @@ fun AppNav() {
                     onOpen = { id -> nav.navigate(Routes.editor(id)) },
                 )
             }
+            composable(Routes.ServicioCampo) {
+                ServicioCampoScreen(
+                    onBack = { nav.popBackStack() },
+                )
+            }
         }
 
         if (showSplash) {
             SplashScreen(onFinished = { showSplash = false })
-        }
-
-        // Onboarding queda por encima del splash sólo en el primer
-        // arranque. Una vez completado se persiste el flag para que
-        // no vuelva a aparecer.
-        if (!showSplash && showOnboarding) {
+        } else if (showOnboarding) {
             OnboardingScreen(
                 onFinish = {
                     container.userPreferences.onboardingDone = true
@@ -176,3 +161,4 @@ fun AppNav() {
         }
     }
 }
+

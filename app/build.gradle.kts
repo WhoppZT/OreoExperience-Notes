@@ -6,6 +6,13 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+val oreoAccessCode = providers.gradleProperty("oreoAccessCode")
+    .orElse(providers.environmentVariable("OREO_ACCESS_CODE"))
+    .orElse("OREO-2026")
+    .get()
+    .replace("\\", "\\\\")
+    .replace("\"", "\\\"")
+
 android {
     namespace = "com.oreoexperience.notes"
     compileSdk = 34
@@ -14,10 +21,11 @@ android {
         applicationId = "com.oreoexperience.notes"
         minSdk = 26
         targetSdk = 34
-        versionCode = 14
-        versionName = "0.8.0"
+        versionCode = 25
+        versionName = "0.9.2.3-jw"
 
         vectorDrawables { useSupportLibrary = true }
+        buildConfigField("String", "ACCESS_CODE", "\"$oreoAccessCode\"")
     }
 
     buildTypes {
