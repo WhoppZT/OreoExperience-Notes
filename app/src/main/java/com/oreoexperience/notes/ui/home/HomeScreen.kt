@@ -16,6 +16,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
@@ -77,6 +81,9 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -300,7 +307,41 @@ fun HomeScreen(
                 else (off / 220f).coerceIn(0f, 1f)
             }
         }
-      Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+      Box(
+          modifier = Modifier
+              .fillMaxSize()
+              .padding(padding)
+              // Swipe horizontal entre tabs (Todos / Discursos / Consideraciones
+              // / General) desde cualquier punto del cuerpo de la pantalla.
+              // Usa awaitHorizontalTouchSlopOrCancellation para sólo consumir
+              // los eventos cuando el gesto es claramente horizontal — los
+              // verticales caen al LazyColumn y siguen scrolleando normal.
+              .pointerInput(activeTab) {
+                  val swipeThresholdPx = 64.dp.toPx()
+                  awaitEachGesture {
+                      val down = awaitFirstDown(requireUnconsumed = false)
+                      var totalX = 0f
+                      val started: PointerInputChange? =
+                          awaitHorizontalTouchSlopOrCancellation(down.id) { change, over ->
+                              totalX += over
+                              change.consume()
+                          }
+                      if (started != null) {
+                          horizontalDrag(started.id) { change ->
+                              totalX += change.positionChange().x
+                              change.consume()
+                          }
+                          val tabs = HomeTab.values()
+                          val idx = tabs.indexOf(activeTab).coerceAtLeast(0)
+                          if (totalX < -swipeThresholdPx && idx < tabs.lastIndex) {
+                              vm.setActiveTab(tabs[idx + 1])
+                          } else if (totalX > swipeThresholdPx && idx > 0) {
+                              vm.setActiveTab(tabs[idx - 1])
+                          }
+                      }
+                  }
+              },
+      ) {
         LazyColumn(
             state = listState,
             modifier = Modifier

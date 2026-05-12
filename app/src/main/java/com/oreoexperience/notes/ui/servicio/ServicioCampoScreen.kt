@@ -209,7 +209,7 @@ fun ServicioCampoScreen(
             }
             item {
                 Text(
-                    text = "Predicación · revisitas · cursos · publicaciones",
+                    text = "Predicación · revisitas · cursos",
                     color = OreoPalette.OnSurfaceMuted,
                     fontSize = 13.sp,
                     modifier = Modifier.padding(horizontal = 18.dp, vertical = 0.dp),
@@ -360,8 +360,6 @@ private fun MonthSummaryCard(state: ServicioCampoUiState) {
         ) {
             StatTile(value = state.totals.totalRevisits, label = "Revisitas")
             StatTile(value = state.totals.totalStudies, label = "Cursos")
-            StatTile(value = state.totals.totalPublications, label = "Publicaciones")
-            StatTile(value = state.totals.totalVideos, label = "Videos")
         }
     }
 }
@@ -623,14 +621,14 @@ private fun RegistroRow(
         DayBadge(record.dateMillis)
         Spacer(Modifier.size(12.dp))
         Column(modifier = Modifier.weight(1f)) {
+            val desglose = listOfNotNull(
+                record.revisits.takeIf { it > 0 }?.let { "$it rev." },
+                record.studies.takeIf { it > 0 }?.let { "$it cursos" },
+            ).joinToString(" · ")
+            val headerText = "%.1f h".format(Locale("es", "ES"), record.hours) +
+                if (desglose.isNotEmpty()) " · $desglose" else ""
             Text(
-                text = "%.1f h · ".format(Locale("es", "ES"), record.hours) +
-                    listOfNotNull(
-                        record.revisits.takeIf { it > 0 }?.let { "$it rev." },
-                        record.studies.takeIf { it > 0 }?.let { "$it cursos" },
-                        record.publications.takeIf { it > 0 }?.let { "$it pub." },
-                        record.videos.takeIf { it > 0 }?.let { "$it videos" },
-                    ).joinToString(" · ").ifBlank { "Sin desglose" },
+                text = headerText,
                 color = OreoPalette.OnSurface,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,

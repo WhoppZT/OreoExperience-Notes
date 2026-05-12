@@ -21,8 +21,8 @@ android {
         applicationId = "com.oreoexperience.notes"
         minSdk = 26
         targetSdk = 34
-        versionCode = 25
-        versionName = "0.9.2.3-jw"
+        versionCode = 26
+        versionName = "0.9.2.4-jw"
 
         vectorDrawables { useSupportLibrary = true }
         buildConfigField("String", "ACCESS_CODE", "\"$oreoAccessCode\"")

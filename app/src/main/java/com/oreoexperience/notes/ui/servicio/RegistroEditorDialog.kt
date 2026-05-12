@@ -81,9 +81,9 @@ fun RegistroEditorDialog(
         )
     }
     var revisits by remember { mutableStateOf(existing?.revisits ?: 0) }
-    var publications by remember { mutableStateOf(existing?.publications ?: 0) }
-    var videos by remember { mutableStateOf(existing?.videos ?: 0) }
     var studies by remember { mutableStateOf(existing?.studies ?: 0) }
+    val carriedPublications = existing?.publications ?: 0
+    val carriedVideos = existing?.videos ?: 0
     var notes by remember { mutableStateOf(existing?.notes.orEmpty()) }
 
     ModalBottomSheet(
@@ -153,12 +153,6 @@ fun RegistroEditorDialog(
             Stepper("Revisitas", revisits) { revisits = (revisits + it).coerceAtLeast(0) }
             Spacer(Modifier.height(8.dp))
             Stepper("Cursos bíblicos", studies) { studies = (studies + it).coerceAtLeast(0) }
-            Spacer(Modifier.height(8.dp))
-            Stepper("Publicaciones", publications) {
-                publications = (publications + it).coerceAtLeast(0)
-            }
-            Spacer(Modifier.height(8.dp))
-            Stepper("Videos", videos) { videos = (videos + it).coerceAtLeast(0) }
             Spacer(Modifier.height(14.dp))
 
             OutlinedTextField(
@@ -213,8 +207,8 @@ fun RegistroEditorDialog(
                                     dateMillis = RegistroCampoRepository.startOfDayMillis(initialDayMillis),
                                     hours = parsedHours,
                                     revisits = revisits,
-                                    publications = publications,
-                                    videos = videos,
+                                    publications = carriedPublications,
+                                    videos = carriedVideos,
                                     studies = studies,
                                     notes = notes.trim(),
                                 )

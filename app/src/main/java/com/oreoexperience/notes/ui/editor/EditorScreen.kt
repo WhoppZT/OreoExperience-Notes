@@ -57,10 +57,10 @@ import androidx.compose.material.icons.outlined.FormatUnderlined
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CloudDone
-import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Sync
+import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.Title
 import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material3.AlertDialog
@@ -113,6 +113,7 @@ import com.oreoexperience.notes.data.NoteBlock
 import com.oreoexperience.notes.ui.LocalAppContainer
 import com.oreoexperience.notes.ui.components.BottomTimerBar
 import com.oreoexperience.notes.ui.components.MediaPreview
+import com.oreoexperience.notes.ui.components.OreoCookieIcon
 import com.oreoexperience.notes.ui.theme.OreoMotion
 import com.oreoexperience.notes.ui.theme.OreoPalette
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -288,86 +289,28 @@ fun EditorScreen(
                 SaveStatusPill(status = state.saveStatus)
                 Spacer(Modifier.weight(1f))
 
-                Box {
-                    IconButton(onClick = { menuOpen = true }) {
-                        Icon(
-                            imageVector = Icons.Outlined.MoreHoriz,
-                            contentDescription = "Opciones",
-                            tint = OreoPalette.Accent,
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = menuOpen,
-                        onDismissRequest = { menuOpen = false },
-                    ) {
-                        // Cada nota se persiste apenas se abre el editor,
-                        // así que las acciones del menú (pin, compartir,
-                        // eliminar) están siempre disponibles — no hay
-                        // distinción "nueva vs guardada".
-                        DropdownMenuItem(
-                            text = {
-                                Text(if (state.pinned) "Quitar fijado" else "Fijar al tope")
-                            },
-                            leadingIcon = {
-                                Icon(Icons.Outlined.PushPin, null)
-                            },
-                            onClick = {
-                                menuOpen = false
-                                vm.togglePin()
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Compartir") },
-                            leadingIcon = { Icon(Icons.Outlined.Share, null) },
-                            onClick = {
-                                menuOpen = false
-                                shareEditorState(context = ctxLocal, vmState = state)
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Establecer cronómetro") },
-                            onClick = {
-                                menuOpen = false
-                                showTimerDialog = true
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    "Eliminar nota",
-                                    color = OreoPalette.DangerFill,
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.Outlined.Delete,
-                                    null,
-                                    tint = OreoPalette.DangerFill,
-                                )
-                            },
-                            onClick = {
-                                menuOpen = false
-                                showDelete = true
-                            },
-                        )
-                    }
-                }
-
-                // Botón "Guardar" explícito (único CTA en la top bar).
-                // Dispara persist() sin cerrar el editor. El "Listo"
-                // anterior se retiró por pedido del usuario — el back y
-                // el auto-save cubren ese flujo.
-                TextButton(
-                    onClick = { vm.saveNow() },
-                    enabled = state.saveStatus != SaveStatus.Saving,
-                ) {
-                    Text(
-                        text = "Guardar",
-                        color = OreoPalette.Accent,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 17.sp,
-                    )
-                }
+                EditorOreoMenu(
+                    expanded = menuOpen,
+                    pinned = state.pinned,
+                    onExpand = { menuOpen = true },
+                    onDismiss = { menuOpen = false },
+                    onTogglePin = {
+                        menuOpen = false
+                        vm.togglePin()
+                    },
+                    onShare = {
+                        menuOpen = false
+                        shareEditorState(context = ctxLocal, vmState = state)
+                    },
+                    onTimer = {
+                        menuOpen = false
+                        showTimerDialog = true
+                    },
+                    onDelete = {
+                        menuOpen = false
+                        showDelete = true
+                    },
+                )
             }
 
             // Cuerpo scrolleable: título + bloques.
@@ -943,5 +886,114 @@ private fun shareEditorState(
     }
     context.startActivity(
         android.content.Intent.createChooser(intent, "Compartir nota"),
+    )
+}
+
+/**
+ * Menú "galleta Oreo" del editor de notas. Reemplaza el clásico
+ * trío "···" con un icono dibujado a mano que evoca una Oreo, y
+ * presenta las acciones (fijar, compartir, cronómetro, eliminar)
+ * dentro de un popup más redondeado, con padding generoso, divisor
+ * sutil para la acción destructiva y *leading icon* en cada item.
+ */
+@Composable
+private fun EditorOreoMenu(
+    expanded: Boolean,
+    pinned: Boolean,
+    onExpand: () -> Unit,
+    onDismiss: () -> Unit,
+    onTogglePin: () -> Unit,
+    onShare: () -> Unit,
+    onTimer: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Box {
+        IconButton(onClick = onExpand) {
+            OreoCookieIcon(
+                size = 22.dp,
+                tint = OreoPalette.Accent,
+            )
+        }
+        androidx.compose.material3.MaterialTheme(
+            colorScheme = androidx.compose.material3.MaterialTheme.colorScheme.copy(
+                surface = OreoPalette.SurfaceCard,
+                onSurface = OreoPalette.OnSurface,
+            ),
+            shapes = androidx.compose.material3.MaterialTheme.shapes.copy(
+                extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
+            ),
+        ) {
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = onDismiss,
+                offset = androidx.compose.ui.unit.DpOffset(x = (-4).dp, y = 4.dp),
+                modifier = Modifier
+                    .background(
+                        color = OreoPalette.SurfaceCard,
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
+                    )
+                    .padding(vertical = 4.dp),
+            ) {
+                OreoMenuItem(
+                    icon = Icons.Outlined.PushPin,
+                    label = if (pinned) "Quitar fijado" else "Fijar al tope",
+                    onClick = onTogglePin,
+                )
+                OreoMenuItem(
+                    icon = Icons.Outlined.Share,
+                    label = "Compartir",
+                    onClick = onShare,
+                )
+                OreoMenuItem(
+                    icon = Icons.Outlined.Timer,
+                    label = "Cronómetro",
+                    onClick = onTimer,
+                )
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 14.dp, vertical = 4.dp)
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(OreoPalette.Outline.copy(alpha = 0.35f)),
+                )
+                OreoMenuItem(
+                    icon = Icons.Outlined.Delete,
+                    label = "Eliminar nota",
+                    onClick = onDelete,
+                    destructive = true,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OreoMenuItem(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    destructive: Boolean = false,
+) {
+    val tint = if (destructive) OreoPalette.DangerFill else OreoPalette.Accent
+    val textColor = if (destructive) OreoPalette.DangerFill else OreoPalette.OnSurface
+    DropdownMenuItem(
+        modifier = Modifier.padding(horizontal = 6.dp),
+        leadingIcon = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(20.dp),
+            )
+        },
+        text = {
+            Text(
+                text = label,
+                color = textColor,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        },
+        onClick = onClick,
     )
 }
