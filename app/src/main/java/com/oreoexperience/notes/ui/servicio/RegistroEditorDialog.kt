@@ -230,6 +230,9 @@ fun RegistroEditorDialog(
 
 @Composable
 private fun Stepper(label: String, value: Int, onDelta: (Int) -> Unit) {
+    // El stepper queda agrupado y compacto: label + [−ⓥ+] uno al
+    // lado del otro. Antes había un weight(1f) que empujaba el
+    // contador al borde derecho y se veía desconectado del label.
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -237,27 +240,25 @@ private fun Stepper(label: String, value: Int, onDelta: (Int) -> Unit) {
             .background(OreoPalette.SurfaceCardHi)
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
             text = label,
             color = OreoPalette.OnSurface,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
-            modifier = Modifier.weight(1f),
         )
         StepperButton(symbol = "−", enabled = value > 0) { onDelta(-1) }
-        Spacer(Modifier.size(10.dp))
         Text(
             text = value.toString(),
             color = OreoPalette.OnSurface,
             fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier
-                .size(width = 36.dp, height = 28.dp)
+                .size(width = 28.dp, height = 28.dp)
                 .padding(top = 2.dp),
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
-        Spacer(Modifier.size(10.dp))
         StepperButton(symbol = "+", enabled = true) { onDelta(+1) }
     }
 }

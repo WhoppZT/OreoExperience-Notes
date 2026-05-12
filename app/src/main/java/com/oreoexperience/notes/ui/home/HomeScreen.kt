@@ -165,57 +165,6 @@ fun HomeScreen(
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // Lista actualmente visible bajo la tab activa (sin papelera).
-    // La usamos como input del exportador PDF.
-    val visibleForExport = remember(state.items) { state.items }
-
-    // SAF launcher: el usuario elige dónde guardar el .pdf.
-    val pdfLauncher = rememberLauncherForActivityResult(
-        contract = CreateDocument("application/pdf"),
-    ) { uri ->
-        if (uri != null) {
-            scope.launch {
-                runCatching {
-                    withContext(Dispatchers.IO) {
-                        container.pdfExportManager.export(
-                            discursos = visibleForExport,
-                            title = activeTab.label,
-                            outUri = uri,
-                        )
-                    }
-                }.onSuccess { pages ->
-                    Toast.makeText(
-                        ctx,
-                        "PDF exportado · $pages páginas",
-                        Toast.LENGTH_LONG,
-                    ).show()
-                }.onFailure { err ->
-                    Toast.makeText(
-                        ctx,
-                        "No se pudo exportar: ${err.message ?: "error"}",
-                        Toast.LENGTH_LONG,
-                    ).show()
-                }
-            }
-        }
-    }
-
-    val onExportPdf: () -> Unit = exporter@{
-        if (visibleForExport.isEmpty()) {
-            Toast.makeText(
-                ctx,
-                "No hay notas en \"${activeTab.label}\" para exportar.",
-                Toast.LENGTH_SHORT,
-            ).show()
-            return@exporter
-        }
-        val safeName = activeTab.label
-            .lowercase()
-            .replace(" ", "_")
-            .replace("/", "-")
-        pdfLauncher.launch("oreo_${safeName}.pdf")
-    }
-
     val pinned = remember(state.items) { state.items.filter { it.pinned } }
     val unpinned = remember(state.items) { state.items.filter { !it.pinned } }
     val grouped = remember(unpinned) { groupByMonth(unpinned) }
@@ -406,8 +355,6 @@ fun HomeScreen(
                             sortBy = state.sortBy,
                             onSortBy = vm::setSortBy,
                             onSettings = onSettings,
-                            onExportPdf = onExportPdf,
-                            exportLabel = activeTab.label,
                         )
                     }
                     SearchBar(
@@ -517,17 +464,15 @@ private fun FloatingCollapsedHeader(visible: Boolean, title: String) {
 }
 
 /**
- * Botón "···" inline para el header compacto: contiene los dropdowns de
- * Ordenar, Exportar PDF y Ajustes. Se usa pegado al título en la misma
- * fila para mantener todo el header en la parte superior de la pantalla.
+ * Botón inline para el header compacto: contiene los dropdowns de
+ * Ordenar y Ajustes. El export a PDF vive ahora dentro de cada nota
+ * (menú Oreo del editor) y dentro de Servicio del Campo.
  */
 @Composable
 private fun HeaderMenuButton(
     sortBy: SortBy,
     onSortBy: (SortBy) -> Unit,
     onSettings: () -> Unit,
-    onExportPdf: () -> Unit,
-    exportLabel: String,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     var sortOpen by remember { mutableStateOf(false) }
@@ -549,14 +494,6 @@ private fun HeaderMenuButton(
                 onClick = {
                     menuOpen = false
                     sortOpen = true
-                },
-            )
-            DropdownMenuItem(
-                text = { Text("Exportar \"$exportLabel\" a PDF") },
-                leadingIcon = { Icon(Icons.Outlined.Description, contentDescription = null) },
-                onClick = {
-                    menuOpen = false
-                    onExportPdf()
                 },
             )
             DropdownMenuItem(

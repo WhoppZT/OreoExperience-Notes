@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -187,12 +189,65 @@ fun SplashScreen(onFinished: () -> Unit) {
                 color = OreoPalette.OnSurfaceMuted,
                 fontSize = 13.sp,
             )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = "v${BuildConfig.VERSION_NAME}",
-                color = OreoPalette.OnSurfaceFaint,
-                fontSize = 11.sp,
+            Spacer(Modifier.height(6.dp))
+            VersionBadge(version = BuildConfig.VERSION_NAME)
+        }
+    }
+}
+
+/**
+ * Pill compacto con la versión actual. Si el versionName tiene un
+ * sufijo como "ORBETA" (ej. "1.0.0 ORBETA"), separa el número del
+ * canal y dibuja un mini-tag violeta a la derecha. Si no hay sufijo,
+ * muestra solamente la versión.
+ */
+@Composable
+private fun VersionBadge(version: String) {
+    val parts = version.trim().split(" ", limit = 2)
+    val core = parts.firstOrNull().orEmpty()
+    val channel = parts.getOrNull(1)
+    Row(
+        modifier = Modifier
+            .background(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        OreoPalette.AccentDeep.copy(alpha = 0.32f),
+                        OreoPalette.Accent.copy(alpha = 0.28f),
+                    ),
+                ),
+                shape = RoundedCornerShape(999.dp),
             )
+            .border(
+                width = 1.dp,
+                color = OreoPalette.Accent.copy(alpha = 0.45f),
+                shape = RoundedCornerShape(999.dp),
+            )
+            .padding(horizontal = 12.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "v$core",
+            color = OreoPalette.OnSurface,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        if (!channel.isNullOrBlank()) {
+            Spacer(Modifier.size(8.dp))
+            Box(
+                modifier = Modifier
+                    .background(
+                        color = OreoPalette.Accent,
+                        shape = RoundedCornerShape(6.dp),
+                    )
+                    .padding(horizontal = 6.dp, vertical = 1.dp),
+            ) {
+                Text(
+                    text = channel,
+                    color = Color.White,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Black,
+                )
+            }
         }
     }
 }

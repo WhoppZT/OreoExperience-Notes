@@ -56,6 +56,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.border
+import com.oreoexperience.notes.BuildConfig
 import com.oreoexperience.notes.data.LicenseManager
 import com.oreoexperience.notes.data.ThemeMode
 import com.oreoexperience.notes.ui.LocalAppContainer
@@ -228,12 +230,7 @@ fun SettingsScreen(
                         subtitle = "Creado por Elihu Rueda",
                     )
                     Divider()
-                    InfoRow(
-                        icon = Icons.Outlined.Info,
-                        iconTint = OreoPalette.OnSurfaceFaint,
-                        title = "Versión",
-                        subtitle = "0.8.0",
-                    )
+                    VersionRow(version = BuildConfig.VERSION_NAME)
                 }
             }
 
@@ -446,6 +443,72 @@ private fun InfoRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(title, color = OreoPalette.OnSurface, fontSize = 16.sp)
             Text(subtitle, color = OreoPalette.OnSurfaceFaint, fontSize = 12.sp)
+        }
+    }
+}
+
+/**
+ * Fila de "Versión" con el badge ORBETA al lado del número. Lee
+ * BuildConfig.VERSION_NAME — si tiene formato "X.Y.Z CHANNEL" pinta
+ * el canal como un mini-tag violeta. Si no, muestra el número crudo.
+ */
+@Composable
+private fun VersionRow(version: String) {
+    val parts = version.trim().split(" ", limit = 2)
+    val core = parts.firstOrNull().orEmpty()
+    val channel = parts.getOrNull(1)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconBubble(icon = Icons.Outlined.Info, tint = OreoPalette.OnSurfaceFaint)
+        Spacer(Modifier.size(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Versión",
+                color = OreoPalette.OnSurface,
+                fontSize = 16.sp,
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "v$core",
+                    color = OreoPalette.OnSurfaceMuted,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                if (!channel.isNullOrBlank()) {
+                    Spacer(Modifier.size(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                    colors = listOf(
+                                        OreoPalette.AccentDeep,
+                                        OreoPalette.Accent,
+                                    ),
+                                ),
+                                shape = RoundedCornerShape(6.dp),
+                            )
+                            .border(
+                                width = 0.5.dp,
+                                color = OreoPalette.AccentSub.copy(alpha = 0.6f),
+                                shape = RoundedCornerShape(6.dp),
+                            )
+                            .padding(horizontal = 7.dp, vertical = 2.dp),
+                    ) {
+                        Text(
+                            text = channel,
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Black,
+                        )
+                    }
+                }
+            }
         }
     }
 }

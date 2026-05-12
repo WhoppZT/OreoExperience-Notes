@@ -63,6 +63,7 @@ import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CloudDone
 import androidx.compose.material.icons.outlined.BorderColor
+import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Sync
@@ -162,6 +163,8 @@ fun EditorScreen(
             initializer { EditorViewModel(container.repository, mediaStorage) }
         }
     )
+    val pdfExportManager = container.pdfExportManager
+    val repository = container.repository
     LaunchedEffect(discursoId, initialCategoryKey) {
         vm.load(discursoId, initialCategoryKey)
     }
@@ -171,6 +174,48 @@ fun EditorScreen(
     var showDelete by remember { mutableStateOf(false) }
     var showTimerDialog by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
+
+    // SAF launcher para exportar la nota actual a PDF.
+    val pdfLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/pdf"),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            // Aseguramos que la versión persistida esté al día antes de exportar.
+            val id = runCatching { vm.saveBlocking() }.getOrNull() ?: state.id
+            val effectiveId = if (id > 0L) id else state.id
+            val discurso = runCatching { repository.get(effectiveId) }.getOrNull()
+            if (discurso == null) {
+                android.widget.Toast.makeText(
+                    ctxLocal,
+                    "No se pudo exportar la nota",
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
+                return@launch
+            }
+            runCatching {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    pdfExportManager.export(
+                        discursos = listOf(discurso),
+                        title = discurso.title.ifBlank { "Nota" },
+                        outUri = uri,
+                    )
+                }
+            }.onSuccess { pages ->
+                android.widget.Toast.makeText(
+                    ctxLocal,
+                    "PDF exportado · $pages página${if (pages > 1) "s" else ""}",
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
+            }.onFailure { err ->
+                android.widget.Toast.makeText(
+                    ctxLocal,
+                    "No se pudo exportar: ${err.message ?: "error"}",
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+    }
 
     // Track del bloque de texto enfocado para insertar media después.
     var focusedTextBlockId by remember { mutableStateOf<String?>(null) }
@@ -312,6 +357,16 @@ fun EditorScreen(
                     onTimer = {
                         menuOpen = false
                         showTimerDialog = true
+                    },
+                    onExportPdf = {
+                        menuOpen = false
+                        val safeTitle = state.title
+                            .ifBlank { "nota" }
+                            .lowercase()
+                            .replace(" ", "_")
+                            .replace("/", "-")
+                            .take(40)
+                        pdfLauncher.launch("oreo_${safeTitle}.pdf")
                     },
                     onDelete = {
                         menuOpen = false
@@ -909,6 +964,7 @@ private fun EditorOreoMenu(
     onTogglePin: () -> Unit,
     onShare: () -> Unit,
     onTimer: () -> Unit,
+    onExportPdf: () -> Unit,
     onDelete: () -> Unit,
 ) {
     Box {
@@ -952,6 +1008,11 @@ private fun EditorOreoMenu(
                     icon = Icons.Outlined.Timer,
                     label = "Cronómetro",
                     onClick = onTimer,
+                )
+                OreoMenuItem(
+                    icon = Icons.Outlined.PictureAsPdf,
+                    label = "Exportar a PDF",
+                    onClick = onExportPdf,
                 )
                 Box(
                     modifier = Modifier
