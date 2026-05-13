@@ -27,6 +27,8 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -92,7 +94,10 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -221,6 +226,21 @@ fun EditorScreen(
     // Track del bloque de texto enfocado para insertar media después.
     var focusedTextBlockId by remember { mutableStateOf<String?>(null) }
     var focusedCursorOffset by remember { mutableStateOf(-1) }
+
+    // Map de FocusRequester y RichTextState por bloque. Lo usamos para
+    // que al tocar el espacio libre (debajo de todos los bloques o
+    // entre bloque y bloque) el cursor caiga en el bloque de texto más
+    // cercano, en vez de quedarse trabado donde estaba.
+    val blockFocusRequesters = remember { mutableStateMapOf<String, FocusRequester>() }
+    val blockStates = remember { mutableStateMapOf<String, RichTextState>() }
+    fun focusBlockAtEnd(id: String) {
+        val rts = blockStates[id]
+        if (rts != null) {
+            val len = rts.annotatedString.length
+            rts.selection = TextRange(len)
+        }
+        blockFocusRequesters[id]?.requestFocus()
+    }
 
     // Pickers de media.
     val imagePicker = rememberLauncherForActivityResult(
@@ -423,18 +443,23 @@ fun EditorScreen(
                 Spacer(Modifier.height(10.dp))
 
                 // Render de cada bloque
-                state.blocks.forEach { block ->
+                state.blocks.forEachIndexed { idx, block ->
                     when (block) {
-                        is NoteBlock.Text -> TextBlockEditor(
-                            block = block,
-                            initialMarkdown = block.markdown,
-                            onMarkdownChange = { md -> vm.updateTextBlock(block.id, md) },
-                            onFocused = { rts, cursor ->
-                                focusedTextBlockId = block.id
-                                focusedCursorOffset = cursor
-                                activeStateRef.value = rts
-                            },
-                        )
+                        is NoteBlock.Text -> {
+                            val fr = blockFocusRequesters.getOrPut(block.id) { FocusRequester() }
+                            TextBlockEditor(
+                                block = block,
+                                initialMarkdown = block.markdown,
+                                focusRequester = fr,
+                                onMarkdownChange = { md -> vm.updateTextBlock(block.id, md) },
+                                onFocused = { rts, cursor ->
+                                    focusedTextBlockId = block.id
+                                    focusedCursorOffset = cursor
+                                    activeStateRef.value = rts
+                                    blockStates[block.id] = rts
+                                },
+                            )
+                        }
                         is NoteBlock.Image -> MediaPreview(
                             fileName = block.fileName,
                             isVideo = false,
@@ -448,8 +473,49 @@ fun EditorScreen(
                             onDelete = { vm.removeBlock(block.id) },
                         )
                     }
+                    // Spacer entre bloques. Cuando el usuario toca este
+                    // área (que de otra forma se vería como un "hueco"
+                    // entre párrafos), enfocamos el bloque de texto más
+                    // cercano hacia arriba o, si no hay, el más cercano
+                    // hacia abajo.
+                    val nearestTextId: String? = remember(state.blocks, idx) {
+                        val before = state.blocks.subList(0, idx + 1)
+                            .asReversed()
+                            .firstNotNullOfOrNull { (it as? NoteBlock.Text)?.id }
+                        before ?: state.blocks.drop(idx + 1)
+                            .firstNotNullOfOrNull { (it as? NoteBlock.Text)?.id }
+                    }
+                    Spacer(
+                        modifier = Modifier
+                            .height(10.dp)
+                            .fillMaxWidth()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = {
+                                    nearestTextId?.let { focusBlockAtEnd(it) }
+                                },
+                            ),
+                    )
                 }
-                Spacer(Modifier.height(120.dp))
+                // Área libre al final del cuerpo. Al tocarla, el cursor
+                // va al final del último bloque de texto y aparece el
+                // teclado, como en iOS Notes.
+                Spacer(
+                    modifier = Modifier
+                        .height(120.dp)
+                        .fillMaxWidth()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {
+                                val lastTextId = state.blocks
+                                    .filterIsInstance<NoteBlock.Text>()
+                                    .lastOrNull()?.id
+                                lastTextId?.let { focusBlockAtEnd(it) }
+                            },
+                        ),
+                )
             }
 
             AnimatedVisibility(
@@ -546,6 +612,7 @@ fun EditorScreen(
 private fun TextBlockEditor(
     block: NoteBlock.Text,
     initialMarkdown: String,
+    focusRequester: FocusRequester,
     onMarkdownChange: (String) -> Unit,
     onFocused: (RichTextState, Int) -> Unit,
 ) {
@@ -581,6 +648,7 @@ private fun TextBlockEditor(
         state = richState,
         modifier = Modifier
             .fillMaxWidth()
+            .focusRequester(focusRequester)
             .onFocusChanged { fs ->
                 if (fs.isFocused) onFocused(richState, richState.selection.start)
             },
