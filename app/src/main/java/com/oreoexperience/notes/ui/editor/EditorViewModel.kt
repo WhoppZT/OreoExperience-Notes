@@ -108,13 +108,19 @@ class EditorViewModel(
     private val persistMutex = Mutex()
     private var savedFlashJob: kotlinx.coroutines.Job? = null
 
-    // Pila de snapshots para deshacer cambios. Pusheamos el estado
-    // anterior cada vez que el usuario hace una modificación, con un
-    // debounce de 1.5 s para que rachas de tecleo no llenen la pila.
-    // Capacidad fija: si se llena, se descartan los más viejos.
+    // Pilas de snapshots para deshacer (undo) y rehacer (redo).
+    // Pusheamos el estado anterior cada vez que el usuario hace una
+    // modificación, con un debounce de 1.5 s para que rachas de tecleo
+    // no llenen la pila. La redoStack se llena únicamente cuando se
+    // hace undo, y se vacía automáticamente cuando el usuario hace
+    // una modificación nueva (comportamiento estándar: redo descarta
+    // las ramas alternativas).
     private val undoStack = ArrayDeque<EditorUiState>()
+    private val redoStack = ArrayDeque<EditorUiState>()
     private val _canUndo = MutableStateFlow(false)
     val canUndo: StateFlow<Boolean> = _canUndo.asStateFlow()
+    private val _canRedo = MutableStateFlow(false)
+    val canRedo: StateFlow<Boolean> = _canRedo.asStateFlow()
     private var lastHistoryPushAt = 0L
 
     private fun pushHistory() {
@@ -131,11 +137,20 @@ class EditorViewModel(
         undoStack.addLast(cur)
         while (undoStack.size > UNDO_MAX) undoStack.removeFirst()
         _canUndo.value = undoStack.isNotEmpty()
+        // Una modificación nueva descarta los pasos disponibles para
+        // rehacer — ya no hay forma de volver a esa rama alternativa.
+        if (redoStack.isNotEmpty()) {
+            redoStack.clear()
+            _canRedo.value = false
+        }
     }
 
     /** Vuelve atrás un paso en el historial. Devuelve false si no hay nada que deshacer. */
     fun undo(): Boolean {
         val prev = undoStack.removeLastOrNull() ?: return false
+        // El estado actual queda disponible para rehacer.
+        redoStack.addLast(_state.value)
+        while (redoStack.size > UNDO_MAX) redoStack.removeFirst()
         // Forzamos el push del próximo cambio (rompemos el debounce).
         lastHistoryPushAt = 0L
         _state.value = prev.copy(
@@ -143,6 +158,25 @@ class EditorViewModel(
             restoreVersion = _state.value.restoreVersion + 1,
         )
         _canUndo.value = undoStack.isNotEmpty()
+        _canRedo.value = redoStack.isNotEmpty()
+        saveSignal.trySend(Unit)
+        return true
+    }
+
+    /** Rehace un paso previamente deshecho. Devuelve false si no hay nada que rehacer. */
+    fun redo(): Boolean {
+        val next = redoStack.removeLastOrNull() ?: return false
+        // El estado actual vuelve a la pila de undo para que el botón
+        // de deshacer pueda revertir el redo.
+        undoStack.addLast(_state.value)
+        while (undoStack.size > UNDO_MAX) undoStack.removeFirst()
+        lastHistoryPushAt = 0L
+        _state.value = next.copy(
+            saveStatus = SaveStatus.Dirty,
+            restoreVersion = _state.value.restoreVersion + 1,
+        )
+        _canUndo.value = undoStack.isNotEmpty()
+        _canRedo.value = redoStack.isNotEmpty()
         saveSignal.trySend(Unit)
         return true
     }

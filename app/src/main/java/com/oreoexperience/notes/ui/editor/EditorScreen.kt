@@ -56,6 +56,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Redo
 import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FormatBold
@@ -362,9 +363,11 @@ fun EditorScreen(
                 SaveStatusPill(status = state.saveStatus)
                 Spacer(Modifier.weight(1f))
 
-                // Botón para revertir el último cambio. Aparece solo si
-                // hay historial disponible.
+                // Botones para revertir / volver. Aparecen con fade
+                // solo cuando hay historial disponible en cada
+                // dirección.
                 val canUndo by vm.canUndo.collectAsStateWithLifecycle()
+                val canRedo by vm.canRedo.collectAsStateWithLifecycle()
                 AnimatedVisibility(
                     visible = canUndo,
                     enter = fadeIn(tween(160, easing = OreoMotion.EaseOut)),
@@ -376,7 +379,24 @@ fun EditorScreen(
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Outlined.Undo,
-                            contentDescription = "Deshacer",
+                            contentDescription = "Revertir",
+                            tint = OreoPalette.Accent,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+                AnimatedVisibility(
+                    visible = canRedo,
+                    enter = fadeIn(tween(160, easing = OreoMotion.EaseOut)),
+                    exit = fadeOut(tween(120, easing = OreoMotion.EaseInOut)),
+                ) {
+                    IconButton(
+                        onClick = { vm.redo() },
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.Redo,
+                            contentDescription = "Volver",
                             tint = OreoPalette.Accent,
                             modifier = Modifier.size(20.dp),
                         )
