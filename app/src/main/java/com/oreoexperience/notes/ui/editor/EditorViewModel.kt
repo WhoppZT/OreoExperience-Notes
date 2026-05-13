@@ -50,6 +50,13 @@ data class EditorUiState(
     val loaded: Boolean = false,
     val isSaving: Boolean = false,
     val saveStatus: SaveStatus = SaveStatus.Idle,
+    /**
+     * Aumenta cada vez que se hace undo. La UI lo usa como key para
+     * forzar la re-sincronización del estado interno del editor de
+     * texto enriquecido (que de otro modo conservaría el contenido
+     * tecleado por el usuario y no aplicaría la versión revertida).
+     */
+    val restoreVersion: Long = 0L,
 ) {
     val isEmpty: Boolean
         get() = title.isBlank() && blocks.all { b ->
@@ -100,6 +107,45 @@ class EditorViewModel(
     private val saveSignal = Channel<Unit>(capacity = Channel.CONFLATED)
     private val persistMutex = Mutex()
     private var savedFlashJob: kotlinx.coroutines.Job? = null
+
+    // Pila de snapshots para deshacer cambios. Pusheamos el estado
+    // anterior cada vez que el usuario hace una modificación, con un
+    // debounce de 1.5 s para que rachas de tecleo no llenen la pila.
+    // Capacidad fija: si se llena, se descartan los más viejos.
+    private val undoStack = ArrayDeque<EditorUiState>()
+    private val _canUndo = MutableStateFlow(false)
+    val canUndo: StateFlow<Boolean> = _canUndo.asStateFlow()
+    private var lastHistoryPushAt = 0L
+
+    private fun pushHistory() {
+        val now = System.currentTimeMillis()
+        if (now - lastHistoryPushAt < HISTORY_DEBOUNCE_MS) return
+        lastHistoryPushAt = now
+        val cur = _state.value
+        if (!cur.loaded) return
+        // Evita pushear duplicados consecutivos.
+        val top = undoStack.lastOrNull()
+        if (top != null && top.title == cur.title && top.blocks == cur.blocks &&
+            top.targetDurationSec == cur.targetDurationSec && top.pinned == cur.pinned
+        ) return
+        undoStack.addLast(cur)
+        while (undoStack.size > UNDO_MAX) undoStack.removeFirst()
+        _canUndo.value = undoStack.isNotEmpty()
+    }
+
+    /** Vuelve atrás un paso en el historial. Devuelve false si no hay nada que deshacer. */
+    fun undo(): Boolean {
+        val prev = undoStack.removeLastOrNull() ?: return false
+        // Forzamos el push del próximo cambio (rompemos el debounce).
+        lastHistoryPushAt = 0L
+        _state.value = prev.copy(
+            saveStatus = SaveStatus.Dirty,
+            restoreVersion = _state.value.restoreVersion + 1,
+        )
+        _canUndo.value = undoStack.isNotEmpty()
+        saveSignal.trySend(Unit)
+        return true
+    }
 
     init {
         viewModelScope.launch {
@@ -279,12 +325,14 @@ class EditorViewModel(
     }
 
     fun setTitle(v: String) {
+        pushHistory()
         _state.value = _state.value.copy(title = v)
         markDirty()
     }
 
     /** Reemplaza el markdown de un bloque de texto identificado por [id]. */
     fun updateTextBlock(id: String, markdown: String) {
+        pushHistory()
         _state.value = _state.value.copy(
             blocks = _state.value.blocks.map { b ->
                 if (b is NoteBlock.Text && b.id == id) b.copy(markdown = markdown) else b
@@ -304,6 +352,7 @@ class EditorViewModel(
         splitOffset: Int = -1,
         media: NoteBlock,
     ) {
+        pushHistory()
         val blocks = _state.value.blocks.toMutableList()
         val idx = blocks.indexOfFirst { it.id == afterTextBlockId }
         if (idx == -1) {
@@ -334,6 +383,7 @@ class EditorViewModel(
 
     /** Elimina un bloque por id (y borra el archivo media si aplica). */
     fun removeBlock(id: String) {
+        pushHistory()
         val blocks = _state.value.blocks.toMutableList()
         val idx = blocks.indexOfFirst { it.id == id }
         if (idx == -1) return
@@ -367,6 +417,7 @@ class EditorViewModel(
     }
 
     fun setTargetDuration(seconds: Int) {
+        pushHistory()
         _state.value = _state.value.copy(targetDurationSec = seconds)
         markDirty()
     }
@@ -377,6 +428,7 @@ class EditorViewModel(
     }
 
     fun togglePin() {
+        pushHistory()
         _state.value = _state.value.copy(pinned = !_state.value.pinned)
         markDirty()
     }
@@ -400,5 +452,7 @@ class EditorViewModel(
 
     companion object {
         private const val TAG = "EditorVM"
+        private const val UNDO_MAX = 30
+        private const val HISTORY_DEBOUNCE_MS = 1500L
     }
 }

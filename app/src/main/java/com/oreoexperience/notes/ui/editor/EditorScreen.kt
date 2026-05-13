@@ -56,6 +56,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FormatBold
 import androidx.compose.material.icons.outlined.FormatItalic
@@ -361,6 +362,27 @@ fun EditorScreen(
                 SaveStatusPill(status = state.saveStatus)
                 Spacer(Modifier.weight(1f))
 
+                // Botón para revertir el último cambio. Aparece solo si
+                // hay historial disponible.
+                val canUndo by vm.canUndo.collectAsStateWithLifecycle()
+                AnimatedVisibility(
+                    visible = canUndo,
+                    enter = fadeIn(tween(160, easing = OreoMotion.EaseOut)),
+                    exit = fadeOut(tween(120, easing = OreoMotion.EaseInOut)),
+                ) {
+                    IconButton(
+                        onClick = { vm.undo() },
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.Undo,
+                            contentDescription = "Deshacer",
+                            tint = OreoPalette.Accent,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+
                 EditorOreoMenu(
                     expanded = menuOpen,
                     pinned = state.pinned,
@@ -450,6 +472,7 @@ fun EditorScreen(
                                 block = block,
                                 initialMarkdown = block.markdown,
                                 focusRequester = fr,
+                                restoreVersion = state.restoreVersion,
                                 onMarkdownChange = { md -> vm.updateTextBlock(block.id, md) },
                                 onFocused = { rts, cursor ->
                                     focusedTextBlockId = block.id
@@ -612,6 +635,7 @@ private fun TextBlockEditor(
     block: NoteBlock.Text,
     initialMarkdown: String,
     focusRequester: FocusRequester,
+    restoreVersion: Long,
     onMarkdownChange: (String) -> Unit,
     onFocused: (RichTextState, Int) -> Unit,
 ) {
@@ -623,7 +647,13 @@ private fun TextBlockEditor(
     // state.blocks), el callback seguía llamando a updateTextBlock
     // con el UUID viejo → nada matcheaba → nada se guardaba.
     val currentOnChange by rememberUpdatedState(onMarkdownChange)
-    LaunchedEffect(block.id) {
+    // Re-sincronizamos el estado del editor con el markdown que viene
+    // del ViewModel cuando cambia el id del bloque (carga de la nota)
+    // o cuando se dispara un undo (restoreVersion). Durante el tipeo
+    // normal el ViewModel también actualiza initialMarkdown pero NO
+    // queremos pisar el caret del usuario en ese caso — por eso el
+    // key es (block.id, restoreVersion) y no initialMarkdown.
+    LaunchedEffect(block.id, restoreVersion) {
         if (richState.toMarkdown() != initialMarkdown) {
             richState.setMarkdown(initialMarkdown)
         }

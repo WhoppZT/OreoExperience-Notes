@@ -11,7 +11,7 @@ room = "2.6.1"
 serialization = "1.7.2"
 coroutines = "1.8.1"
 desugar = "2.1.2"
-richeditor = "1.0.0-rc10"
+richeditor = "1.0.0-rc11"
 coil = "2.7.0"
 
 [libraries]
