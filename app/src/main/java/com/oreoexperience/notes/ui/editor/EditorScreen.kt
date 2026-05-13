@@ -21,6 +21,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -671,12 +672,7 @@ private fun FormatToolbar(
                 onClick = { activeState?.toggleSpanStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) },
             )
             VerticalDivider()
-            ToolbarButton(
-                icon = Icons.Outlined.Title,
-                description = "Tamaño de letra (x1 → x2 → x3 → x4 → x1)",
-                active = currentFontLevel(activeState) > 0,
-                onClick = { cycleFontSize(activeState) },
-            )
+            FontSizeToolbarButton(activeState = activeState)
             HighlightToolbarButton(activeState = activeState)
             ToolbarButton(
                 icon = Icons.AutoMirrored.Outlined.FormatListBulleted,
@@ -756,6 +752,34 @@ private fun ToolbarButton(
                 modifier = Modifier.size(20.dp),
             )
         }
+    }
+}
+
+/**
+ * Botón "T" que cicla tamaño de letra y, cada vez que cambia el nivel,
+ * hace un pequeño pulso de escala. Visualiza el cambio: subió un
+ * paso → la T rebota brevemente para confirmar el efecto.
+ */
+@Composable
+private fun FontSizeToolbarButton(activeState: RichTextState?) {
+    val level = currentFontLevel(activeState)
+    val pulse = remember { androidx.compose.animation.core.Animatable(1f) }
+    LaunchedEffect(level) {
+        pulse.snapTo(1.22f)
+        pulse.animateTo(1f, animationSpec = OreoMotion.SpringBouncy())
+    }
+    Box(
+        modifier = Modifier.graphicsLayer {
+            scaleX = pulse.value
+            scaleY = pulse.value
+        },
+    ) {
+        ToolbarButton(
+            icon = Icons.Outlined.Title,
+            description = "Tamaño de letra (x1 → x2 → x3 → x4 → x1)",
+            active = level > 0,
+            onClick = { cycleFontSize(activeState) },
+        )
     }
 }
 
@@ -859,6 +883,20 @@ private fun formatNowDate(): String {
  */
 @Composable
 private fun SaveStatusPill(status: SaveStatus) {
+    // Pulso de brillo cuando el estado pasa a Saved — una corona violeta
+    // que se expande y se desvanece sobre la píldora.
+    val pulseScale = remember { androidx.compose.animation.core.Animatable(1f) }
+    val pulseAlpha = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(status) {
+        if (status == SaveStatus.Saved) {
+            pulseScale.snapTo(0.9f)
+            pulseAlpha.snapTo(0.55f)
+            kotlinx.coroutines.coroutineScope {
+                launch { pulseScale.animateTo(1.45f, tween(560, easing = OreoMotion.EaseOut)) }
+                launch { pulseAlpha.animateTo(0f, tween(620, easing = OreoMotion.EaseInOut)) }
+            }
+        }
+    }
     AnimatedVisibility(
         visible = status != SaveStatus.Idle,
         enter = fadeIn(tween(180, easing = OreoMotion.EaseOut)) +
@@ -904,32 +942,51 @@ private fun SaveStatusPill(status: SaveStatus) {
             ),
             label = "saveRot",
         )
-        Row(
-            modifier = Modifier
-                .background(
-                    color = tint.copy(alpha = 0.12f),
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(999.dp),
+        Box(contentAlignment = Alignment.Center) {
+            // Corona del pulso — dibuja un halo expansivo cuando el
+            // estado se acaba de marcar como Guardado.
+            if (pulseAlpha.value > 0.01f) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .graphicsLayer {
+                            scaleX = pulseScale.value
+                            scaleY = pulseScale.value
+                            alpha = pulseAlpha.value
+                        }
+                        .background(
+                            color = OreoPalette.Accent.copy(alpha = 0.35f),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(999.dp),
+                        ),
                 )
-                .padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = tint,
+            }
+            Row(
                 modifier = Modifier
-                    .size(14.dp)
-                    .let {
-                        if (rotation != 0f) it.rotate(rotation) else it
-                    },
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                text = text,
-                color = tint,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-            )
+                    .background(
+                        color = tint.copy(alpha = 0.12f),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(999.dp),
+                    )
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = tint,
+                    modifier = Modifier
+                        .size(14.dp)
+                        .let {
+                            if (rotation != 0f) it.rotate(rotation) else it
+                        },
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = text,
+                    color = tint,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
         }
     }
 }
@@ -1196,29 +1253,66 @@ private fun HighlightSwatch(
     onClick: () -> Unit,
     isClear: Boolean = false,
 ) {
-    Box(
-        modifier = Modifier
-            .size(34.dp)
-            .clip(CircleShape)
-            .background(
-                color = if (isClear) OreoPalette.SurfaceCardHi else color,
-                shape = CircleShape,
+    // Onda expansiva que sale del swatch al tocarlo. Cada toque la
+    // reinicia con un nuevo "trigger" que dispara el LaunchedEffect.
+    val ringScale = remember { androidx.compose.animation.core.Animatable(1f) }
+    val ringAlpha = remember { androidx.compose.animation.core.Animatable(0f) }
+    var rippleTrigger by remember { mutableStateOf(0) }
+    LaunchedEffect(rippleTrigger) {
+        if (rippleTrigger > 0) {
+            ringScale.snapTo(1f)
+            ringAlpha.snapTo(0.55f)
+            kotlinx.coroutines.coroutineScope {
+                launch { ringScale.animateTo(2.0f, tween(520, easing = OreoMotion.EaseOut)) }
+                launch { ringAlpha.animateTo(0f, tween(560, easing = OreoMotion.EaseInOut)) }
+            }
+        }
+    }
+    Box(contentAlignment = Alignment.Center) {
+        // Anillo expansivo del ripple, dibujado detrás del swatch.
+        if (!isClear && ringAlpha.value > 0.01f) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .graphicsLayer {
+                        scaleX = ringScale.value
+                        scaleY = ringScale.value
+                        alpha = ringAlpha.value
+                    }
+                    .border(
+                        width = 2.dp,
+                        color = color,
+                        shape = CircleShape,
+                    ),
             )
-            .border(
-                width = if (selected) 2.dp else 1.dp,
-                color = if (selected) OreoPalette.OnSurface else OreoPalette.Outline,
-                shape = CircleShape,
-            )
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (isClear) {
-            Icon(
-                imageVector = Icons.Outlined.Delete,
-                contentDescription = label,
-                tint = OreoPalette.OnSurfaceMuted,
-                modifier = Modifier.size(16.dp),
-            )
+        }
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(CircleShape)
+                .background(
+                    color = if (isClear) OreoPalette.SurfaceCardHi else color,
+                    shape = CircleShape,
+                )
+                .border(
+                    width = if (selected) 2.dp else 1.dp,
+                    color = if (selected) OreoPalette.OnSurface else OreoPalette.Outline,
+                    shape = CircleShape,
+                )
+                .clickable {
+                    rippleTrigger += 1
+                    onClick()
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            if (isClear) {
+                Icon(
+                    imageVector = Icons.Outlined.Delete,
+                    contentDescription = label,
+                    tint = OreoPalette.OnSurfaceMuted,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
         }
     }
 }

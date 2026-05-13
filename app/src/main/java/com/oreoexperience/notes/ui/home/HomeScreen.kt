@@ -68,6 +68,7 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -113,6 +114,15 @@ import com.oreoexperience.notes.data.NoteBlockSerializer
 import com.oreoexperience.notes.data.SortBy
 import com.oreoexperience.notes.ui.LocalAppContainer
 import com.oreoexperience.notes.ui.components.SwipeToDeleteRow
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.graphics.graphicsLayer
+import com.oreoexperience.notes.ui.components.EmptyStateIllustration
+import com.oreoexperience.notes.ui.components.OreoSpinner
+import com.oreoexperience.notes.ui.components.TabDotIndicator
+import com.oreoexperience.notes.ui.components.pinnedGlow
+import com.oreoexperience.notes.ui.components.staggeredEntry
+import kotlinx.coroutines.delay
 import com.oreoexperience.notes.ui.theme.OreoMotion
 import com.oreoexperience.notes.ui.theme.OreoPalette
 import kotlinx.coroutines.launch
@@ -257,10 +267,50 @@ fun HomeScreen(
                 else (off / 220f).coerceIn(0f, 1f)
             }
         }
+      // Pull-to-refresh: cuando el usuario tira para abajo desde arriba
+      // de la lista, aparece una galletita Oreo girando. El "refresh" es
+      // visual (los datos ya vienen reactivos), pero da la sensación
+      // satisfactoria de actualizar.
+      val pullState = rememberPullToRefreshState()
+      var refreshing by remember { mutableStateOf(false) }
+      LaunchedEffect(refreshing) {
+          if (refreshing) {
+              delay(700)
+              refreshing = false
+          }
+      }
+      PullToRefreshBox(
+          isRefreshing = refreshing,
+          onRefresh = { refreshing = true },
+          state = pullState,
+          modifier = Modifier
+              .fillMaxSize()
+              .padding(padding),
+          indicator = {
+              // Galletita Oreo en lugar del indicador circular estándar.
+              // Aparece a medida que se tira hacia abajo y gira cuando se
+              // dispara el refresh.
+              val fraction = pullState.distanceFraction.coerceIn(0f, 1.4f)
+              val alphaFactor = (fraction * 1.2f).coerceIn(0f, 1f)
+              Box(
+                  modifier = Modifier
+                      .align(Alignment.TopCenter)
+                      .padding(top = 18.dp)
+                      .graphicsLayer {
+                          translationY = fraction * 56.dp.toPx()
+                          alpha = if (refreshing) 1f else alphaFactor
+                      },
+              ) {
+                  OreoSpinner(
+                      size = 36.dp,
+                      spinning = refreshing,
+                  )
+              }
+          },
+      ) {
       Box(
           modifier = Modifier
               .fillMaxSize()
-              .padding(padding)
               // Swipe horizontal entre tabs (Todos / Discursos / Consideraciones
               // / General) desde cualquier punto del cuerpo de la pantalla.
               // Usa awaitHorizontalTouchSlopOrCancellation para sólo consumir
@@ -376,8 +426,25 @@ fun HomeScreen(
                 )
             }
 
+            // Indicador de puntos: muestra cuántas categorías hay y
+            // cuál está activa. Acompaña al gesto de swipe entre tabs.
+            item {
+                val tabs = HomeTab.values()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 2.dp, bottom = 6.dp),
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    TabDotIndicator(
+                        count = tabs.size,
+                        activeIndex = tabs.indexOf(activeTab).coerceAtLeast(0),
+                    )
+                }
+            }
+
             if (state.items.isEmpty()) {
-                item { EmptyState() }
+                item { AnimatedEmptyState() }
             } else {
                 // Sección Pinned (si hay alguna nota pinned).
                 if (pinned.isNotEmpty()) {
@@ -401,6 +468,7 @@ fun HomeScreen(
                                 onOpen = onOpen,
                                 onTrash = vm::trashNote,
                                 onTogglePin = vm::togglePin,
+                                triggerKey = activeTab,
                             )
                         }
                     }
@@ -414,6 +482,7 @@ fun HomeScreen(
                             onOpen = onOpen,
                             onTrash = vm::trashNote,
                             onTogglePin = vm::togglePin,
+                            triggerKey = activeTab,
                         )
                     }
                 }
@@ -428,6 +497,7 @@ fun HomeScreen(
             title = activeTab.label,
         )
       }
+      } // cierra PullToRefreshBox
     }
 }
 
@@ -631,6 +701,7 @@ private fun GroupedCard(
     onOpen: (Long) -> Unit,
     onTrash: (Discurso) -> Unit,
     onTogglePin: (Discurso) -> Unit,
+    triggerKey: Any? = null,
 ) {
     // Cada nota es una tarjeta individual redondeada (estilo cards
     // separadas) en lugar de filas unidas dentro de un solo rectángulo.
@@ -646,19 +717,22 @@ private fun GroupedCard(
             ),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        items.forEach { d ->
+        items.forEachIndexed { idx, d ->
             // Cada fila se envuelve en SwipeToDeleteRow para soportar
             // el gesto iOS de borrar deslizando.
+            // Las notas fijadas reciben un halo pulsante muy suave que las
+            // diferencia del resto sin recargar la lista.
+            val cardModifier = Modifier
+                .fillMaxWidth()
+                .staggeredEntry(index = idx, triggerKey = triggerKey)
+                .let { if (d.pinned) it.pinnedGlow() else it }
+                .clip(RoundedCornerShape(20.dp))
+                .background(
+                    color = OreoPalette.SurfaceCard,
+                    shape = RoundedCornerShape(20.dp),
+                )
             SwipeToDeleteRow(onDelete = { onTrash(d) }) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(
-                            color = OreoPalette.SurfaceCard,
-                            shape = RoundedCornerShape(20.dp),
-                        ),
-                ) {
+                Box(modifier = cardModifier) {
                     NoteRow(
                         d = d,
                         onClick = { onOpen(d.id) },
@@ -813,13 +887,15 @@ private fun NoteRow(
 }
 
 @Composable
-private fun EmptyState() {
+private fun AnimatedEmptyState() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 80.dp, start = 18.dp, end = 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        EmptyStateIllustration()
+        Spacer(Modifier.height(14.dp))
         Text(
             text = "Sin notas",
             color = OreoPalette.OnSurface,

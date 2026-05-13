@@ -15,6 +15,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
@@ -81,6 +84,26 @@ fun SplashScreen(onFinished: () -> Unit) {
         label = "iconAlpha",
     )
 
+    // Morph hacia el FAB del Home: cuando empieza la salida, el ícono
+    // se achica hacia la esquina inferior derecha (donde vive el botón
+    // de nueva nota). Da continuidad visual entre el splash y la
+    // pantalla principal.
+    val exitScale by animateFloatAsState(
+        targetValue = if (visible) 1f else 0.18f,
+        animationSpec = tween(420, easing = OreoMotion.EaseEmphasized),
+        label = "exitScale",
+    )
+    val exitTranslateX by animateFloatAsState(
+        targetValue = if (visible) 0f else 1f,
+        animationSpec = tween(420, easing = OreoMotion.EaseEmphasized),
+        label = "exitTx",
+    )
+    val exitTranslateY by animateFloatAsState(
+        targetValue = if (visible) 0f else 1f,
+        animationSpec = tween(420, easing = OreoMotion.EaseEmphasized),
+        label = "exitTy",
+    )
+
     // Halo pulsante atrás del ícono.
     val haloTransition = rememberInfiniteTransition(label = "splashHalo")
     val haloPulse by haloTransition.animateFloat(
@@ -99,6 +122,9 @@ fun SplashScreen(onFinished: () -> Unit) {
         visible = false
     }
 
+    // Necesitamos importar mutableStateOf para los root size states
+    // (queda arriba; este comentario es solo para anclar referencias)
+
     if (alpha < 0.01f) return
 
     Box(
@@ -108,7 +134,34 @@ fun SplashScreen(onFinished: () -> Unit) {
             .background(OreoPalette.Bg0),
         contentAlignment = Alignment.Center,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        // Vector hacia el FAB: aproximamos su posición (esquina inferior
+        // derecha con padding). Cuando exitTranslate avanza de 0 a 1, el
+        // ícono se desplaza desde el centro de la pantalla hasta donde
+        // está el botón flotante del Home.
+        val density = LocalDensity.current
+        var rootWidthPx by remember { mutableStateOf(0f) }
+        var rootHeightPx by remember { mutableStateOf(0f) }
+        val fabTargetX = with(density) {
+            (rootWidthPx / 2f) - 36.dp.toPx() - 16.dp.toPx()
+        }
+        val fabTargetY = with(density) {
+            (rootHeightPx / 2f) - 64.dp.toPx() - 24.dp.toPx()
+        }
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .onGloballyPositioned { coords ->
+                    rootWidthPx = coords.size.width.toFloat()
+                    rootHeightPx = coords.size.height.toFloat()
+                }
+                .graphicsLayer {
+                    translationX = fabTargetX * exitTranslateX
+                    translationY = fabTargetY * exitTranslateY
+                    scaleX = exitScale
+                    scaleY = exitScale
+                },
+        ) {
             // Logo con halo violeta atrás.
             Box(contentAlignment = Alignment.Center) {
                 // Halo violeta exterior — círculo difuso que pulsa.

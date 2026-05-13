@@ -4,6 +4,8 @@ import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
@@ -49,6 +51,8 @@ private fun slideSpec(): FiniteAnimationSpec<IntOffset> =
     tween(durationMillis = 380, easing = OreoMotion.EaseEmphasized)
 private fun fadeSpec(): FiniteAnimationSpec<Float> =
     tween(durationMillis = 260, easing = OreoMotion.EaseEmphasized)
+private fun scaleSpec(): FiniteAnimationSpec<Float> =
+    tween(durationMillis = 360, easing = OreoMotion.EaseEmphasized)
 
 @Composable
 fun AppNav() {
@@ -112,6 +116,35 @@ fun AppNav() {
             }
             composable(
                 Routes.Editor,
+                // Hero feel: cuando se abre una nota desde el Home, la pantalla
+                // del editor entra escalando desde 0.92 + un fade-in. Combinado
+                // con el press-feedback de las cards en el Home, da la
+                // sensación de que la tarjeta se "expande" hacia el editor.
+                // Al volver hace exactamente lo inverso.
+                enterTransition = {
+                    scaleIn(
+                        animationSpec = scaleSpec(),
+                        initialScale = 0.92f,
+                    ) + fadeIn(animationSpec = fadeSpec())
+                },
+                exitTransition = {
+                    scaleOut(
+                        animationSpec = scaleSpec(),
+                        targetScale = 1.04f,
+                    ) + fadeOut(animationSpec = fadeSpec())
+                },
+                popEnterTransition = {
+                    scaleIn(
+                        animationSpec = scaleSpec(),
+                        initialScale = 1.04f,
+                    ) + fadeIn(animationSpec = fadeSpec())
+                },
+                popExitTransition = {
+                    scaleOut(
+                        animationSpec = scaleSpec(),
+                        targetScale = 0.92f,
+                    ) + fadeOut(animationSpec = fadeSpec())
+                },
                 arguments = listOf(
                     navArgument("id") { type = NavType.LongType },
                     navArgument("cat") {
