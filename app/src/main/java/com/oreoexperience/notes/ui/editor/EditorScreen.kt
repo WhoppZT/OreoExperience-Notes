@@ -121,8 +121,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.mohamedrejeb.richeditor.model.RichTextState
 import com.mohamedrejeb.richeditor.model.rememberRichTextState
-import com.mohamedrejeb.richeditor.ui.material3.RichTextEditor
-import com.mohamedrejeb.richeditor.ui.material3.RichTextEditorDefaults
+import com.mohamedrejeb.richeditor.ui.BasicRichTextEditor
 import com.oreoexperience.notes.data.NoteBlock
 import com.oreoexperience.notes.ui.LocalAppContainer
 import com.oreoexperience.notes.ui.components.BottomTimerBar
@@ -644,39 +643,41 @@ private fun TextBlockEditor(
         onFocused(richState, cursor)
     }
 
-    RichTextEditor(
-        state = richState,
-        modifier = Modifier
-            .fillMaxWidth()
-            .focusRequester(focusRequester)
-            .onFocusChanged { fs ->
-                if (fs.isFocused) onFocused(richState, richState.selection.start)
-            },
-        textStyle = LocalTextStyle.current.copy(
-            color = OreoPalette.OnSurface,
-            fontSize = 17.sp,
-            lineHeight = 24.sp,
-            textAlign = TextAlign.Start,
-        ),
-        colors = RichTextEditorDefaults.richTextEditorColors(
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent,
-            disabledIndicatorColor = Color.Transparent,
-            errorIndicatorColor = Color.Transparent,
-            cursorColor = OreoPalette.Accent,
-            textColor = OreoPalette.OnSurface,
-            containerColor = Color.Transparent,
-        ),
-        placeholder = {
-            Text(
-                text = "Empezá a escribir…",
-                color = OreoPalette.OnSurfaceFaint,
+    // Uso BasicRichTextEditor (no la variante material3) para evitar
+    // el padding interno del TextField, que descalibra el hit-test:
+    // antes el texto visible quedaba en una posición pero la tap area
+    // de las palabras estaba corrida unos dípis, y al tocar una
+    // palabra el cursor caía en otro lado. Sin el wrapper material3,
+    // el toque coincide exactamente con el texto.
+    Box(modifier = Modifier.fillMaxWidth()) {
+        BasicRichTextEditor(
+            state = richState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(focusRequester)
+                .onFocusChanged { fs ->
+                    if (fs.isFocused) onFocused(richState, richState.selection.start)
+                },
+            textStyle = LocalTextStyle.current.copy(
+                color = OreoPalette.OnSurface,
                 fontSize = 17.sp,
+                lineHeight = 24.sp,
                 textAlign = TextAlign.Start,
-            )
-        },
-        contentPadding = PaddingValues(0.dp),
-    )
+            ),
+            cursorBrush = SolidColor(OreoPalette.Accent),
+            decorationBox = { inner ->
+                if (richState.annotatedString.isEmpty()) {
+                    Text(
+                        text = "Empezá a escribir…",
+                        color = OreoPalette.OnSurfaceFaint,
+                        fontSize = 17.sp,
+                        textAlign = TextAlign.Start,
+                    )
+                }
+                inner()
+            },
+        )
+    }
 }
 
 @Composable
