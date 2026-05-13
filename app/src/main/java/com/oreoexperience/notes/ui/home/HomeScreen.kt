@@ -720,25 +720,33 @@ private fun GroupedCard(
         items.forEachIndexed { idx, d ->
             // Cada fila se envuelve en SwipeToDeleteRow para soportar
             // el gesto iOS de borrar deslizando.
+            // El stagger se aplica AFUERA del SwipeToDeleteRow para que el
+            // fondo rojo del swipe acompañe a la card durante la entrada y
+            // no quede asomando por los bordes mientras la card se escala.
             // Las notas fijadas reciben un halo pulsante muy suave que las
             // diferencia del resto sin recargar la lista.
             val cardModifier = Modifier
                 .fillMaxWidth()
-                .staggeredEntry(index = idx, triggerKey = triggerKey)
                 .let { if (d.pinned) it.pinnedGlow() else it }
                 .clip(RoundedCornerShape(20.dp))
                 .background(
                     color = OreoPalette.SurfaceCard,
                     shape = RoundedCornerShape(20.dp),
                 )
-            SwipeToDeleteRow(onDelete = { onTrash(d) }) {
-                Box(modifier = cardModifier) {
-                    NoteRow(
-                        d = d,
-                        onClick = { onOpen(d.id) },
-                        onTogglePin = { onTogglePin(d) },
-                        onTrash = { onTrash(d) },
-                    )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .staggeredEntry(index = idx, triggerKey = triggerKey),
+            ) {
+                SwipeToDeleteRow(onDelete = { onTrash(d) }) {
+                    Box(modifier = cardModifier) {
+                        NoteRow(
+                            d = d,
+                            onClick = { onOpen(d.id) },
+                            onTogglePin = { onTogglePin(d) },
+                            onTrash = { onTrash(d) },
+                        )
+                    }
                 }
             }
         }
