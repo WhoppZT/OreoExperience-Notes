@@ -107,9 +107,11 @@ class EditorViewModel(
     /**
      * Inserta un bloque media después del bloque de texto identificado
      * por [afterTextBlockId]. Si el bloque tenía texto, lo dividimos
-     * en dos en la posición [splitOffset] (cursor) — el resto continúa
-     * en un nuevo bloque de texto debajo del media. Así el flujo de
-     * escritura no se interrumpe.
+     * en dos — **siempre por límite de párrafo** (línea en blanco) más
+     * cercano al cursor [splitOffset]. Si no hay un párrafo accesible
+     * insertamos el media al final del bloque, preservando así el
+     * markdown intacto (no cortamos en medio de `**negrita**`,
+     * `[link](url)` o cualquier otro marcador).
      */
     fun insertMediaAfter(
         afterTextBlockId: String?,
@@ -133,14 +135,37 @@ class EditorViewModel(
             return
         }
         val md = target.markdown
-        val cut = if (splitOffset in 0..md.length) splitOffset else md.length
-        val before = md.substring(0, cut)
-        val after = md.substring(cut)
-        // Reemplazamos el bloque de texto por: antes + media + después
+        // Cortamos por límite de párrafo más próximo: nunca dentro de
+        // un fragmento markdown formateado.
+        val (before, after) = splitAtParagraph(md, splitOffset)
         blocks[idx] = target.copy(markdown = before)
         blocks.add(idx + 1, media)
         blocks.add(idx + 2, NoteBlock.Text(markdown = after))
         _state.value = _state.value.copy(blocks = blocks)
+    }
+
+    /**
+     * Devuelve el par `(antes, después)` cortando el markdown por
+     * límite de párrafo. Si `splitOffset` no está dentro del rango
+     * o no hay un límite razonable, el corte se hace al final
+     * (after = ""), lo que evita romper estructura.
+     */
+    private fun splitAtParagraph(md: String, splitOffset: Int): Pair<String, String> {
+        if (md.isEmpty()) return "" to ""
+        if (splitOffset !in 0..md.length) return md to ""
+        // Buscamos el "\n\n" más cercano por arriba o por abajo del
+        // cursor. Si lo encontramos cortamos exactamente ahí. Si no,
+        // caemos al final del bloque.
+        val before = md.lastIndexOf("\n\n", startIndex = (splitOffset - 1).coerceAtLeast(0))
+        val after = md.indexOf("\n\n", startIndex = splitOffset)
+        val cut = when {
+            before >= 0 && after >= 0 ->
+                if ((splitOffset - before) <= (after - splitOffset)) before + 2 else after + 2
+            before >= 0 -> before + 2
+            after >= 0 -> after + 2
+            else -> md.length
+        }
+        return md.substring(0, cut) to md.substring(cut)
     }
 
     /** Elimina un bloque por id (y borra el archivo media si aplica). */
@@ -155,18 +180,25 @@ class EditorViewModel(
         if (removed is NoteBlock.Video) {
             viewModelScope.launch { mediaStorage.deleteIfExists(removed.fileName) }
         }
-        // Si después de borrar quedan dos bloques de texto adyacentes los
-        // fusionamos para mantener cursor / undo limpio.
+        // Si después de borrar quedan dos bloques de texto adyacentes
+        // los fusionamos usando **doble salto de línea** para no
+        // pegar dos párrafos como uno solo (markdown necesita la
+        // línea en blanco para mantener la separación visual).
         var i = 0
         while (i < blocks.size - 1) {
             val a = blocks[i]
             val b = blocks[i + 1]
             if (a is NoteBlock.Text && b is NoteBlock.Text) {
-                blocks[i] = a.copy(
-                    markdown = if (a.markdown.isEmpty()) b.markdown
-                    else if (b.markdown.isEmpty()) a.markdown
-                    else "${a.markdown}\n${b.markdown}",
-                )
+                val merged = when {
+                    a.markdown.isEmpty() -> b.markdown
+                    b.markdown.isEmpty() -> a.markdown
+                    a.markdown.endsWith("\n\n") || b.markdown.startsWith("\n\n") ->
+                        a.markdown + b.markdown
+                    a.markdown.endsWith("\n") || b.markdown.startsWith("\n") ->
+                        a.markdown + "\n" + b.markdown
+                    else -> a.markdown + "\n\n" + b.markdown
+                }
+                blocks[i] = a.copy(markdown = merged)
                 blocks.removeAt(i + 1)
             } else {
                 i++

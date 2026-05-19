@@ -14,8 +14,8 @@ android {
         applicationId = "com.oreoexperience.notes"
         minSdk = 26
         targetSdk = 34
-        versionCode = 14
-        versionName = "0.8.0"
+        versionCode = 15
+        versionName = "0.9.0"
 
         vectorDrawables { useSupportLibrary = true }
     }

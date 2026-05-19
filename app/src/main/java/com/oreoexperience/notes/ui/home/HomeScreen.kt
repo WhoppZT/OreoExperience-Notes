@@ -31,7 +31,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -39,6 +41,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Search
@@ -54,6 +57,7 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -84,6 +88,7 @@ import com.oreoexperience.notes.data.NoteBlock
 import com.oreoexperience.notes.data.NoteBlockSerializer
 import com.oreoexperience.notes.data.SortBy
 import com.oreoexperience.notes.ui.LocalAppContainer
+import com.oreoexperience.notes.ui.components.FrostedTopBar
 import com.oreoexperience.notes.ui.components.SwipeToDeleteRow
 import com.oreoexperience.notes.ui.theme.OreoPalette
 import kotlinx.coroutines.launch
@@ -116,6 +121,7 @@ fun HomeScreen(
     onNew: () -> Unit,
     onOpen: (Long) -> Unit,
     onSettings: () -> Unit,
+    onOpenReader: (Long) -> Unit = {},
 ) {
     val container = LocalAppContainer.current
     val vm: HomeViewModel = viewModel(
@@ -133,8 +139,26 @@ fun HomeScreen(
     val query by vm.queryState.collectAsStateWithLifecycle()
     val pinned = remember(state.items) { state.items.filter { it.pinned } }
     val unpinned = remember(state.items) { state.items.filter { !it.pinned } }
-    val grouped = remember(unpinned) { groupByMonth(unpinned) }
+    // Si el orden es semántico, agrupamos por palabras clave
+    // compartidas (sin agrupar por mes). Para el resto se mantiene el
+    // grouping clásico por mes/año.
+    val grouped = remember(unpinned, state.sortBy) {
+        if (state.sortBy == SortBy.SEMANTIC) {
+            SemanticGrouper.group(unpinned)
+        } else {
+            groupByMonth(unpinned)
+        }
+    }
     var pinnedExpanded by remember { mutableStateOf(true) }
+    val listState = rememberLazyListState()
+    // "Scrolled" = el primer item ya no está al tope. Activa el
+    // efecto cristal del topbar.
+    val scrolled by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 0 ||
+                listState.firstVisibleItemScrollOffset > 4
+        }
+    }
 
     Scaffold(
         containerColor = OreoPalette.Bg0,
@@ -163,18 +187,24 @@ fun HomeScreen(
             }
         },
     ) { padding ->
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
+        ) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(top = 0.dp, bottom = 88.dp),
         ) {
-            // Top bar (header con "..." a la derecha)
+            // Hueco a la altura del topbar cristal para que el primer
+            // contenido (Large Title) quede por debajo y el scroll lo
+            // pase por debajo del cristal.
             item {
-                TopBar(
-                    sortBy = state.sortBy,
-                    onSortBy = vm::setSortBy,
-                    onSettings = onSettings,
+                Spacer(
+                    Modifier
+                        .statusBarsPadding()
+                        .height(48.dp),
                 )
             }
 
@@ -241,6 +271,7 @@ fun HomeScreen(
                                 onOpen = onOpen,
                                 onTrash = vm::trashNote,
                                 onTogglePin = vm::togglePin,
+                                onReader = onOpenReader,
                             )
                         }
                     }
@@ -254,72 +285,84 @@ fun HomeScreen(
                             onOpen = onOpen,
                             onTrash = vm::trashNote,
                             onTogglePin = vm::togglePin,
+                            onReader = onOpenReader,
                         )
                     }
                 }
             }
         }
+
+        // Topbar cristal — *sticky* superpuesto al LazyColumn. El
+        // alpha del fondo crece cuando el primer item ya no está al
+        // tope; en Android 12+ se aplica un blur real sobre el
+        // contenido del propio bar.
+        FrostedTopBar(
+            scrolled = scrolled,
+            modifier = Modifier.align(Alignment.TopCenter),
+        ) {
+            Spacer(Modifier.weight(1f))
+            TopBarActions(
+                sortBy = state.sortBy,
+                onSortBy = vm::setSortBy,
+                onSettings = onSettings,
+            )
+        }
+        }
     }
 }
 
 @Composable
-private fun TopBar(
+private fun TopBarActions(
     sortBy: SortBy,
     onSortBy: (SortBy) -> Unit,
     onSettings: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     var sortOpen by remember { mutableStateOf(false) }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    Box(
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
     ) {
-        Spacer(Modifier.weight(1f))
-        Box {
-            IconButton(onClick = { menuOpen = true }) {
-                Icon(
-                    imageVector = Icons.Outlined.MoreHoriz,
-                    contentDescription = "Menú",
-                    tint = OreoPalette.Accent,
-                )
-            }
-            DropdownMenu(
-                expanded = menuOpen,
-                onDismissRequest = { menuOpen = false },
-            ) {
+        IconButton(onClick = { menuOpen = true }) {
+            Icon(
+                imageVector = Icons.Outlined.MoreHoriz,
+                contentDescription = "Menú",
+                tint = OreoPalette.Accent,
+            )
+        }
+        DropdownMenu(
+            expanded = menuOpen,
+            onDismissRequest = { menuOpen = false },
+        ) {
+            DropdownMenuItem(
+                text = { Text("Ordenar por…") },
+                leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Sort, contentDescription = null) },
+                onClick = {
+                    menuOpen = false
+                    sortOpen = true
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("Ajustes") },
+                leadingIcon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
+                onClick = {
+                    menuOpen = false
+                    onSettings()
+                },
+            )
+        }
+        DropdownMenu(
+            expanded = sortOpen,
+            onDismissRequest = { sortOpen = false },
+        ) {
+            SortBy.values().forEach { option ->
+                val mark = if (option == sortBy) "✓ " else "    "
                 DropdownMenuItem(
-                    text = { Text("Ordenar por…") },
-                    leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Sort, contentDescription = null) },
+                    text = { Text("$mark${option.label}") },
                     onClick = {
-                        menuOpen = false
-                        sortOpen = true
+                        sortOpen = false
+                        onSortBy(option)
                     },
                 )
-                DropdownMenuItem(
-                    text = { Text("Ajustes") },
-                    leadingIcon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
-                    onClick = {
-                        menuOpen = false
-                        onSettings()
-                    },
-                )
-            }
-            DropdownMenu(
-                expanded = sortOpen,
-                onDismissRequest = { sortOpen = false },
-            ) {
-                SortBy.values().forEach { option ->
-                    val mark = if (option == sortBy) "✓ " else "    "
-                    DropdownMenuItem(
-                        text = { Text("$mark${option.label}") },
-                        onClick = {
-                            sortOpen = false
-                            onSortBy(option)
-                        },
-                    )
-                }
             }
         }
     }
@@ -434,6 +477,7 @@ private fun GroupedCard(
     onOpen: (Long) -> Unit,
     onTrash: (Discurso) -> Unit,
     onTogglePin: (Discurso) -> Unit,
+    onReader: (Long) -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -453,6 +497,7 @@ private fun GroupedCard(
                         onClick = { onOpen(d.id) },
                         onTogglePin = { onTogglePin(d) },
                         onTrash = { onTrash(d) },
+                        onReader = { onReader(d.id) },
                     )
                 }
             }
@@ -475,6 +520,7 @@ private fun NoteRow(
     onClick: () -> Unit,
     onTogglePin: () -> Unit,
     onTrash: () -> Unit,
+    onReader: () -> Unit = {},
 ) {
     val df = remember { SimpleDateFormat("d/MM/yy", Locale("es")) }
     val title = d.title.ifBlank { "Nota nueva" }
@@ -577,6 +623,14 @@ private fun NoteRow(
                     onClick = {
                         menuOpen = false
                         onTogglePin()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Modo lectura") },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Outlined.MenuBook, contentDescription = null) },
+                    onClick = {
+                        menuOpen = false
+                        onReader()
                     },
                 )
                 DropdownMenuItem(

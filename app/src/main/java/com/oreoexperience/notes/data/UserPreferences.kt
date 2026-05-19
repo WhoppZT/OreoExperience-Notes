@@ -81,11 +81,22 @@ enum class ThemeMode(val key: String, val label: String) {
     }
 }
 
-/** Criterio de ordenamiento de la lista de notas. */
+/**
+ * Criterio de ordenamiento de la lista de notas.
+ *
+ *  - [UPDATED] / [CREATED] / [TITLE]: orden clásico (fecha o
+ *    alfabético), agrupando además por mes/año en la home.
+ *  - [SEMANTIC]: orden **temático**. La home agrupa por palabras
+ *    clave compartidas entre las notas (cluster ligero estilo
+ *    bag-of-words), de modo que no queda todo amontonado bajo un
+ *    único mes. Es el modo recomendado cuando hay muchas notas en
+ *    fechas próximas pero hablan de temas distintos.
+ */
 enum class SortBy(val key: String, val label: String) {
     UPDATED("updated", "Fecha de edición"),
     CREATED("created", "Fecha de creación"),
-    TITLE("title", "Título");
+    TITLE("title", "Título"),
+    SEMANTIC("semantic", "Orden semántico");
 
     companion object {
         fun fromKey(k: String): SortBy = values().firstOrNull { it.key == k } ?: UPDATED

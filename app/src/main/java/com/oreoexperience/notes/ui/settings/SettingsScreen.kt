@@ -230,7 +230,7 @@ fun SettingsScreen(
                         icon = Icons.Outlined.Info,
                         iconTint = OreoPalette.OnSurfaceFaint,
                         title = "Versión",
-                        subtitle = "0.8.0",
+                        subtitle = "0.9.0",
                     )
                 }
             }

@@ -27,6 +27,7 @@ import com.oreoexperience.notes.ui.LocalAppContainer
 import com.oreoexperience.notes.ui.editor.EditorScreen
 import com.oreoexperience.notes.ui.home.HomeScreen
 import com.oreoexperience.notes.ui.onboarding.OnboardingScreen
+import com.oreoexperience.notes.ui.reader.ReaderScreen
 import com.oreoexperience.notes.ui.settings.SettingsScreen
 import com.oreoexperience.notes.ui.splash.SplashScreen
 import com.oreoexperience.notes.ui.theme.OreoPalette
@@ -35,9 +36,11 @@ import com.oreoexperience.notes.ui.trash.TrashScreen
 object Routes {
     const val Home = "home"
     const val Editor = "editor/{id}"
+    const val Reader = "reader/{id}"
     const val Settings = "settings"
     const val Trash = "trash"
     fun editor(id: Long) = "editor/$id"
+    fun reader(id: Long) = "reader/$id"
 }
 
 /**
@@ -132,6 +135,7 @@ fun AppNav() {
                     onNew = { nav.navigate(Routes.editor(0L)) },
                     onOpen = { id -> nav.navigate(Routes.editor(id)) },
                     onSettings = { nav.navigate(Routes.Settings) },
+                    onOpenReader = { id -> nav.navigate(Routes.reader(id)) },
                 )
             }
             composable(
@@ -143,6 +147,18 @@ fun AppNav() {
                     discursoId = id,
                     onBack = { nav.popBackStack() },
                     onSaved = { _ -> nav.popBackStack() },
+                    onOpenReader = { savedId -> nav.navigate(Routes.reader(savedId)) },
+                )
+            }
+            composable(
+                Routes.Reader,
+                arguments = listOf(navArgument("id") { type = NavType.LongType }),
+            ) { entry ->
+                val id = entry.arguments?.getLong("id") ?: 0L
+                ReaderScreen(
+                    discursoId = id,
+                    onBack = { nav.popBackStack() },
+                    onEdit = { _ -> nav.popBackStack() },
                 )
             }
             composable(Routes.Settings) {

@@ -18,7 +18,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,6 +50,7 @@ import androidx.compose.material.icons.outlined.FormatListNumbered
 import androidx.compose.material.icons.outlined.FormatStrikethrough
 import androidx.compose.material.icons.outlined.FormatUnderlined
 import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Share
@@ -72,6 +75,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -128,6 +132,7 @@ fun EditorScreen(
     discursoId: Long,
     onBack: () -> Unit,
     onSaved: (Long) -> Unit,
+    onOpenReader: (Long) -> Unit = {},
 ) {
     val container = LocalAppContainer.current
     val mediaStorage = container.mediaStorage
@@ -288,6 +293,24 @@ fun EditorScreen(
                                 showTimerDialog = true
                             },
                         )
+                        if (!state.isNew) {
+                            DropdownMenuItem(
+                                text = { Text("Modo lectura") },
+                                leadingIcon = {
+                                    Icon(Icons.AutoMirrored.Outlined.MenuBook, null)
+                                },
+                                onClick = {
+                                    menuOpen = false
+                                    scope.launch {
+                                        // Guardamos primero para que
+                                        // el reader vea los últimos
+                                        // cambios, y luego abrimos.
+                                        val savedId = vm.save()
+                                        onOpenReader(savedId)
+                                    }
+                                },
+                            )
+                        }
                         if (!state.isNew) {
                             DropdownMenuItem(
                                 text = {
@@ -485,9 +508,16 @@ fun EditorScreen(
 /**
  * Editor de bloque de texto: un RichTextEditor que se sincroniza con
  * el ViewModel. Cada bloque tiene su propio state para evitar que se
- * peleen. El callback onFocused se dispara cuando el bloque toma el
- * foco — usamos eso para que el botón "Insertar imagen" sepa dónde
- * cortar.
+ * peleen.
+ *
+ *  - El callback [onFocused] se dispara cuando el bloque **toma el
+ *    foco** (no en cada movimiento del cursor) y además cuando el
+ *    bloque sigue enfocado y el cursor se mueve dentro de él. Esto
+ *    evita recomposiciones del padre por cada tecla.
+ *  - Sólo seteamos el markdown desde fuera al cargar (primera
+ *    composición de un id de bloque dado) — escribir de nuevo el
+ *    markdown mientras el usuario tipea provoca pérdida de selección
+ *    y cursor.
  */
 @Composable
 private fun TextBlockEditor(
@@ -497,6 +527,11 @@ private fun TextBlockEditor(
     onFocused: (RichTextState, Int) -> Unit,
 ) {
     val richState = rememberRichTextState()
+    var hasFocus by remember { mutableStateOf(false) }
+
+    // Sólo seteamos el markdown la primera vez por bloque. Para
+    // evitar resets reiniciamos sólo si el id cambió y el contenido
+    // actual difiere — nunca durante la escritura activa.
     LaunchedEffect(block.id) {
         if (richState.toMarkdown() != initialMarkdown) {
             richState.setMarkdown(initialMarkdown)
@@ -508,13 +543,15 @@ private fun TextBlockEditor(
             .distinctUntilChanged()
             .collect { onMarkdownChange(richState.toMarkdown()) }
     }
-    // Re-emitir foco cuando cambia el cursor para que el insertor de
-    // media tenga la posición actualizada.
+    // Re-publicar la posición del cursor sólo si **este bloque** es el
+    // que tiene el foco. Eso da el offset correcto al insertor de
+    // media sin spammear recomposiciones del padre cuando otros
+    // bloques tipean.
     val cursor by remember(richState) {
         derivedStateOf { richState.selection.start }
     }
-    LaunchedEffect(cursor) {
-        onFocused(richState, cursor)
+    LaunchedEffect(cursor, hasFocus) {
+        if (hasFocus) onFocused(richState, cursor)
     }
 
     RichTextEditor(
@@ -522,6 +559,7 @@ private fun TextBlockEditor(
         modifier = Modifier
             .fillMaxWidth()
             .onFocusChanged { fs ->
+                hasFocus = fs.isFocused
                 if (fs.isFocused) onFocused(richState, richState.selection.start)
             },
         textStyle = LocalTextStyle.current.copy(
@@ -644,7 +682,21 @@ private fun ToolbarButton(
     onClick: () -> Unit,
     tintActive: Color = OreoPalette.Accent,
 ) {
-    IconButton(onClick = onClick, modifier = Modifier.size(38.dp)) {
+    // Botón **no-focusable**: la clave para que el teclado no se cierre
+    // ni se pierda la selección activa del RichTextEditor al tocar el
+    // toolbar. Usamos un Box con clickable en vez de IconButton porque
+    // este último gana foco por defecto.
+    Box(
+        modifier = Modifier
+            .size(38.dp)
+            .focusProperties { canFocus = false }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
         Icon(
             imageVector = icon,
             contentDescription = description,

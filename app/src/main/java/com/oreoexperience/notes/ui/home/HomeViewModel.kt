@@ -90,12 +90,17 @@ class HomeViewModel(
 
     private fun comparator(sortBy: SortBy): Comparator<Discurso> {
         // Pinned siempre arriba; dentro de cada grupo, el criterio elegido.
+        // En el modo semántico no aplicamos orden temporal aquí: la
+        // función de agrupado de la home re-ordena las notas por
+        // cluster temático. Igualmente caemos a "updatedAt" como
+        // tiebreaker estable.
         val tail: Comparator<Discurso> = when (sortBy) {
             SortBy.UPDATED -> compareByDescending { it.updatedAt }
             SortBy.CREATED -> compareByDescending { it.createdAt }
-            SortBy.TITLE   -> compareBy(String.CASE_INSENSITIVE_ORDER) {
+            SortBy.TITLE -> compareBy(String.CASE_INSENSITIVE_ORDER) {
                 it.title.ifBlank { "Untitled" }
             }
+            SortBy.SEMANTIC -> compareByDescending { it.updatedAt }
         }
         return compareByDescending<Discurso> { it.pinned }.then(tail)
     }
