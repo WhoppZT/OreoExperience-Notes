@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tema base que Activity usa antes de Compose tomar el control. Sólo
+         define colores de la barra de status / nav y el background para
+         que no haya un "flash" blanco al abrir la app. La paleta real vive
+         en código Kotlin (ui.theme.Theme). -->
+    <style name="Theme.OreoExperienceNotes" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@color/bg_root</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <!--
+        Tema de splash nativo. Hereda de Theme.OreoExperienceNotes para
+        mantener la configuración de system bars (sin parpadeo al cambiar
+        a Compose). En v26-30 el `windowBackground` actúa como splash; en
+        v31+ (definido en values-v31/themes.xml) se usan los atributos
+        `windowSplashScreen*` + `postSplashScreenTheme`.
+    -->
+    <style name="Theme.OreoExperience.Launch" parent="Theme.OreoExperienceNotes">
+        <item name="android:windowBackground">@color/splash_bg</item>
+    </style>
+</resources>

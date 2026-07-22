@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Splash nativo "Constelación Aurora" para androidx.core:core-splashscreen.
+
+    Vista: fondo negro puro (splash_bg del tema), un glow radial violeta
+    suave como una aurora boreal, una estrella principal de 5 puntas
+    blanca en el centro, 4 estrellas secundarias (puntos de distintos
+    tamaños) alrededor, y 3 líneas de conexión semi-transparentes que
+    forman una constelación.
+
+    El sistema centra este drawable en un círculo de 192dp dentro de un
+    área segura de 240dp; el viewport de 288dp provee margen.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="288"
+    android:viewportHeight="288">
+
+    <!-- Glow aurora: círculo radial AccentDeep → transparente -->
+    <path android:pathData="M144,144 m-140,0 a140,140 0 1,1 280,0 a140,140 0 1,1 -280,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="144"
+                android:centerY="144"
+                android:gradientRadius="140"
+                android:startColor="#2E5B21B6"
+                android:endColor="#005B21B6"/>
+        </aapt:attr>
+    </path>
+
+    <!-- Líneas de conexión (constelación) -->
+    <path
+        android:strokeColor="#33FFFFFF"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"
+        android:pathData="M144,144 L95,95"/>
+    <path
+        android:strokeColor="#33FFFFFF"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"
+        android:pathData="M144,144 L190,110"/>
+    <path
+        android:strokeColor="#33FFFFFF"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"
+        android:pathData="M144,144 L170,185"/>
+
+    <!-- Estrellas secundarias (puntos blancos) -->
+    <path
+        android:fillColor="#CCFFFFFF"
+        android:pathData="M95,95 m-4,0 a4,4 0 1,1 8,0 a4,4 0 1,1 -8,0"/>
+    <path
+        android:fillColor="#B3FFFFFF"
+        android:pathData="M190,110 m-3,0 a3,3 0 1,1 6,0 a3,3 0 1,1 -6,0"/>
+    <path
+        android:fillColor="#E5FFFFFF"
+        android:pathData="M170,185 m-5,0 a5,5 0 1,1 10,0 a5,5 0 1,1 -10,0"/>
+    <path
+        android:fillColor="#BFFFFFFF"
+        android:pathData="M85,175 m-3.5,0 a3.5,3.5 0 1,1 7,0 a3.5,3.5 0 1,1 -7,0"/>
+
+    <!-- Estrella principal: 5 puntas, outerR=30, innerR=12, centrada en (144,144) -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M144,114 L151,134 L173,135 L155,148 L162,168 L144,156 L126,168 L133,148 L115,135 L137,134 Z"/>
+</vector>

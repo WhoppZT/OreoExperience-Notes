@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- "O" anillo (evenOdd: anillo = exterior - interior). -->
+    <path
+        android:pathData="M54,30 a24,24 0 1 0 0,48 a24,24 0 1 0 0,-48 z M54,42 a12,12 0 1 0 0,24 a12,12 0 1 0 0,-24 z"
+        android:fillColor="#FFB68CFF"
+        android:fillType="evenOdd" />
+</vector>

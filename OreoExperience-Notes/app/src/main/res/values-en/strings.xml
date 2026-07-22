@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Splash -->
+    <string name="splash_app_title">OreoExperience · Notes</string>
+    <string name="splash_author">Made by Elihu Rueda</string>
+    <string name="splash_version_prefix">v</string>
+</resources>
