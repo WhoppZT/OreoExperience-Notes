@@ -1,15 +1,82 @@
-*.iml
-.gradle
+# Built application files
+*.apk
+*.aar
+*.ap_
+*.aab
+*.zip
+*.7z
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+release/
+
+# Gradle files
+.gradle/
+build/
+
+# Local configuration file (sdk path, etc)
 local.properties
+
+# Android Studio
+*.iml
 .idea/
 .DS_Store
-build/
 captures/
-.externalNativeBuild
-.cxx
-*.apk
-*.aab
+
+# NDK
+obj/
+.externalNativeBuild/
+.cxx/
+
+# Signing
+*.jks
 *.keystore
+keyoreo
+
+# Google Services
+google-services.json
+
+# Logs
+*.log
+
+# OS
+Thumbs.db
+
+# Backup files
+*.bak
+*.backup_*
+backups/
+
+# Design mockups (not source code)
+design-mockups/
+
+# Font distribution files (only res/font/ TTFs are needed)
+FontMi/
+__MACOSX/
+
+# Project root images (not source code)
+OreoExperience-Notes/AjustesSettingsScreen.png
+OreoExperience-Notes/cafeteria-removebg-preview.ico
+OreoExperience-Notes/cafeteria-removebg-preview.png
+
+# Utility scripts
+check_*.ps1
+find_*.ps1
 
 # Generated KSP / schemas (we keep schemas/ committed for migration safety)
 .kotlin/
+
+# Web env
+*.env
+!*.env.example
+
+# Node
+node_modules/

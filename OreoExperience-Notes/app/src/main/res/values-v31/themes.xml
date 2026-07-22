@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Variante v31+ (Android 12 y superior). Aquí es donde se activan los
+    atributos oficiales de la SplashScreen API de plataforma:
+    - windowSplashScreenBackground: color de fondo
+    - windowSplashScreenAnimatedIcon: drawable centrado (288dp viewport)
+    - postSplashScreenTheme: tema al que el sistema hace swap cuando
+      installSplashScreen() resuelve la "primer frame" lista
+-->
+<resources>
+    <style name="Theme.OreoExperienceNotes" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@color/bg_root</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+    </style>
+
+    <style name="Theme.OreoExperience.Launch" parent="Theme.OreoExperienceNotes">
+        <item name="android:windowBackground">@color/splash_bg</item>
+        <item name="android:windowSplashScreenBackground">@color/splash_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.OreoExperienceNotes</item>
+    </style>
+</resources>

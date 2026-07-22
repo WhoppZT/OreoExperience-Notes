@@ -1,0 +1,19 @@
+*.iml
+.gradle
+local.properties
+.idea/
+.DS_Store
+build/
+captures/
+.externalNativeBuild
+.cxx
+*.apk
+*.aab
+*.keystore
+# Excepción: el keystore "oreo" se commitea a propósito para que cada APK
+# que Devin construya tenga la misma firma y se pueda actualizar sin
+# desinstalar la versión previa. No es una clave de producción.
+!app/release.keystore
+
+# Generated KSP / schemas (we keep schemas/ committed for migration safety)
+.kotlin/

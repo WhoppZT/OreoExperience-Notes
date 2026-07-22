@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- Galleta base oscura -->
+    <path
+        android:pathData="M24,4 a20,20 0 1 0 0,40 a20,20 0 1 0 0,-40 z"
+        android:fillColor="#1A1A2E" />
+    <!-- Patrón decorativo de la galleta -->
+    <path
+        android:pathData="M24,10 a14,14 0 1 0 0,28 a14,14 0 1 0 0,-28 z"
+        android:fillColor="#2D2D44" />
+    <!-- Relleno blanco central (crema) -->
+    <path
+        android:pathData="M24,16 a8,8 0 1 0 0,16 a8,8 0 1 0 0,-16 z"
+        android:fillColor="#FFFFFF" />
+    <!-- Texto OREO simplificado (círculo interior) -->
+    <path
+        android:pathData="M24,20 a4,4 0 1 0 0,8 a4,4 0 1 0 0,-8 z"
+        android:fillColor="#1A1A2E" />
+</vector>
