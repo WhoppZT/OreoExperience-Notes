@@ -42,9 +42,6 @@ escrituras de apoyo, notas libres) — manteniendo la estética *Aurora*
 ./gradlew assembleDebug
 ```
 
-El APK queda en `app/build/outputs/apk/debug/app-debug.apk`.
-
-Para abrirlo en Android Studio: `File → Open` → seleccioná la raíz del repo.
 
 ## Estructura
 
