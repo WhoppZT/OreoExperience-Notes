@@ -36,6 +36,13 @@ data class Discurso(
      * recientemente" y se purga automáticamente pasados 30 días.
      */
     val deletedAt: Long? = null,
+    /**
+     * Categoría de la nota — usada para agrupar en pestañas (Discursos,
+     * Consideraciones, Servicio del Campo, General). Guardamos la `key`
+     * del enum [NoteCategory] como string para evitar problemas si el
+     * orden de los valores cambia en el futuro.
+     */
+    val category: String = NoteCategory.DISCURSO.key,
 )
 
 /**

@@ -1,11 +1,18 @@
 package com.oreoexperience.notes.ui.home
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.StickyNote2
+import androidx.compose.material.icons.outlined.AllInclusive
+import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.RecordVoiceOver
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.oreoexperience.notes.data.Discurso
 import com.oreoexperience.notes.data.DiscursoRepository
 import com.oreoexperience.notes.data.MediaStorage
 import com.oreoexperience.notes.data.NoteBlockSerializer
+import com.oreoexperience.notes.data.NoteCategory
 import com.oreoexperience.notes.data.SortBy
 import com.oreoexperience.notes.data.UserPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,10 +24,31 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.snapshotFlow
 
+/**
+ * Pestaña activa del Home. `null` = "Todos".
+ *
+ * Servicio del Campo se trata aparte (es su propia pantalla con
+ * mini-calendario y registros estructurados), por eso aquí solo
+ * exponemos las tabs que listan notas-libres. El `icon` se usa en
+ * los chips de la fila de categorías para identificación instantánea.
+ */
+enum class HomeTab(
+    val label: String,
+    val category: NoteCategory?,
+    val icon: ImageVector,
+) {
+    TODOS("Todos", null, Icons.Outlined.AllInclusive),
+    DISCURSOS("Discursos", NoteCategory.DISCURSO, Icons.Outlined.RecordVoiceOver),
+    CONSIDERACIONES("Consideraciones", NoteCategory.CONSIDERACION, Icons.Outlined.Lightbulb),
+    GENERAL("General", NoteCategory.GENERAL, Icons.AutoMirrored.Outlined.StickyNote2),
+}
+
 data class HomeUiState(
     val items: List<Discurso> = emptyList(),
     val query: String = "",
     val sortBy: SortBy = SortBy.UPDATED,
+    val activeTab: HomeTab = HomeTab.TODOS,
+    val categoryCounts: Map<String, Int> = emptyMap(),
 )
 
 class HomeViewModel(
@@ -31,23 +59,29 @@ class HomeViewModel(
 
     private val query = MutableStateFlow("")
     private val sortByFlow = snapshotFlow { userPreferences.sortBy }
+    private val activeTab = MutableStateFlow(HomeTab.TODOS)
 
     val state: StateFlow<HomeUiState> = combine(
         repository.observeAll(),
         query,
         sortByFlow,
-    ) { items, q, sortBy ->
-        val filtered = if (q.isBlank()) items
+        activeTab,
+    ) { items, q, sortBy, tab ->
+        val byTab = if (tab.category == null) items
+        else items.filter { it.category == tab.category.key }
+        val filtered = if (q.isBlank()) byTab
         else {
             val needle = q.trim().lowercase()
-            items.filter { d -> d.matchesQuery(needle) }
+            byTab.filter { d -> d.matchesQuery(needle) }
         }
         // Re-ordenar respetando pinned siempre arriba.
         val sorted = filtered.sortedWith(comparator(sortBy))
-        HomeUiState(items = sorted, query = q, sortBy = sortBy)
+        val counts = items.groupingBy { it.category }.eachCount()
+        HomeUiState(items = sorted, query = q, sortBy = sortBy, activeTab = tab, categoryCounts = counts)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
     val queryState: StateFlow<String> = query.asStateFlow()
+    val activeTabState: StateFlow<HomeTab> = activeTab.asStateFlow()
 
     fun setQuery(q: String) {
         query.value = q
@@ -57,9 +91,18 @@ class HomeViewModel(
         userPreferences.sortBy = sortBy
     }
 
+    fun setActiveTab(tab: HomeTab) {
+        activeTab.value = tab
+    }
+
     /** Mueve la nota a la papelera (soft delete). */
     fun trashNote(d: Discurso) {
         viewModelScope.launch { repository.trash(d) }
+    }
+
+    /** Restaura la nota desde la papelera. */
+    fun restoreNote(d: Discurso) {
+        viewModelScope.launch { repository.restore(d) }
     }
 
     /** Pin / unpin de la nota. */

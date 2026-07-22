@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -66,13 +67,15 @@ fun MediaPreview(
     val uri = remember(fileName) { storage.uriFor(fileName) }
     var showFull by remember { mutableStateOf(false) }
     var showDelete by remember { mutableStateOf(false) }
+    val screenHeightDp = LocalConfiguration.current.screenHeightDp
+    val maxMediaHeight = (screenHeightDp * 0.5f).dp.coerceAtMost(360.dp)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 80.dp, max = 320.dp)
+            .heightIn(min = 80.dp, max = maxMediaHeight)
             .padding(vertical = 6.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(18.dp))
             .background(OreoPalette.SurfaceCard)
             .combinedClickable(
                 onClick = { showFull = true },
@@ -157,6 +160,8 @@ fun MediaPreview(
             },
             containerColor = OreoPalette.SurfaceCard,
             titleContentColor = OreoPalette.OnSurface,
+            textContentColor = OreoPalette.OnSurfaceMuted,
+            shape = RoundedCornerShape(28.dp),
         )
     }
 }
@@ -218,8 +223,9 @@ private fun FullScreenMediaPreview(
                 IconButton(
                     onClick = onClose,
                     modifier = Modifier
+                        .size(40.dp)
                         .background(
-                            Color.Black.copy(alpha = 0.45f),
+                            Color.Black.copy(alpha = 0.55f),
                             CircleShape,
                         ),
                 ) {
@@ -227,6 +233,7 @@ private fun FullScreenMediaPreview(
                         imageVector = Icons.Outlined.Close,
                         contentDescription = "Cerrar",
                         tint = Color.White,
+                        modifier = Modifier.size(20.dp),
                     )
                 }
             }

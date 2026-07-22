@@ -1,8 +1,8 @@
 package com.oreoexperience.notes.ui.nav
 
-import androidx.compose.animation.core.Spring
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -13,11 +13,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -27,128 +32,191 @@ import com.oreoexperience.notes.ui.LocalAppContainer
 import com.oreoexperience.notes.ui.editor.EditorScreen
 import com.oreoexperience.notes.ui.home.HomeScreen
 import com.oreoexperience.notes.ui.onboarding.OnboardingScreen
+import com.oreoexperience.notes.ui.servicio.ServicioCampoScreen
 import com.oreoexperience.notes.ui.settings.SettingsScreen
-import com.oreoexperience.notes.ui.splash.SplashScreen
+import com.oreoexperience.notes.ui.components.UpdateDialog
+import com.oreoexperience.notes.ui.reader.ReaderScreen
+import com.oreoexperience.notes.ui.theme.OreoMotion
 import com.oreoexperience.notes.ui.theme.OreoPalette
 import com.oreoexperience.notes.ui.trash.TrashScreen
+import com.oreoexperience.notes.data.update.CheckResult
+import com.oreoexperience.notes.data.update.GitHubRelease
+import kotlinx.coroutines.launch
 
 object Routes {
     const val Home = "home"
-    const val Editor = "editor/{id}"
+    const val Editor = "editor/{id}?cat={cat}"
     const val Settings = "settings"
     const val Trash = "trash"
-    fun editor(id: Long) = "editor/$id"
+    const val ServicioCampo = "servicio_campo"
+    const val Reader = "reader/{id}"
+    fun editor(id: Long, category: String? = null): String =
+        if (category == null) "editor/$id?cat=" else "editor/$id?cat=$category"
+    fun reader(id: Long): String = "reader/$id"
 }
 
-/**
- * Animaciones de navegación estilo iOS:
- *
- *   - Push horizontal completo desde la derecha con un spring
- *     **críticamente amortiguado** (sin overshoot) y stiffness medio,
- *     que reproduce la curva nativa de UIKit (`spring(response: 0.45,
- *     dampingFraction: 1.0)`).
- *   - El destino que se va se desliza un tercio a la izquierda
- *     (parallax típico de iOS) con fade simultáneo.
- *   - Fade rápido (180 ms con curva fast-out-slow-in) para que la
- *     transición se sienta fluida.
- *   - Scale de entrada sutil (0.985 → 1.0) — apenas perceptible,
- *     suficiente para dar la sensación de "asentar".
- */
-private fun slideSpring() = spring<androidx.compose.ui.unit.IntOffset>(
-    dampingRatio = Spring.DampingRatioNoBouncy,
-    stiffness = 380f,
+// ─── Spring-based nav specs using OreoMotion ──────────────────
+private val navSpringDamping = OreoMotion.SpringNavElegant<Float>().dampingRatio
+private val navSpringStiffness = OreoMotion.SpringNavElegant<Float>().stiffness
+private val cardSpringDamping = OreoMotion.SpringCard<Float>().dampingRatio
+private val cardSpringStiffness = OreoMotion.SpringCard<Float>().stiffness
+
+private fun slideInSpec() = spring<IntOffset>(
+    dampingRatio = navSpringDamping,
+    stiffness = navSpringStiffness,
 )
 
-private fun scaleSpring() = spring<Float>(
-    dampingRatio = Spring.DampingRatioNoBouncy,
-    stiffness = 420f,
+private fun slideOutSpec() = spring<IntOffset>(
+    dampingRatio = navSpringDamping,
+    stiffness = navSpringStiffness,
 )
 
-private fun fadeSpec() = tween<Float>(
-    durationMillis = 180,
-    easing = androidx.compose.animation.core.FastOutSlowInEasing,
+private fun fadeSpec() = spring<Float>(
+    dampingRatio = navSpringDamping,
+    stiffness = navSpringStiffness,
 )
+
+private fun scaleInSpec() = spring<Float>(
+    dampingRatio = cardSpringDamping,
+    stiffness = cardSpringStiffness,
+)
+
+private fun scaleOutSpec() = spring<Float>(
+    dampingRatio = cardSpringDamping,
+    stiffness = cardSpringStiffness,
+)
+
+// Transiciones de entrada/salida elegantes: slide sutil + fade suave.
+private fun pushEnter(): EnterTransition =
+    slideInHorizontally(animationSpec = slideInSpec(), initialOffsetX = { it }) +
+        fadeIn(animationSpec = fadeSpec(), initialAlpha = 0.5f)
+
+private fun pushExit(): ExitTransition =
+    slideOutHorizontally(animationSpec = slideOutSpec(), targetOffsetX = { -it / 3 }) +
+        fadeOut(animationSpec = fadeSpec(), targetAlpha = 0.5f)
+
+private fun popEnter(): EnterTransition =
+    slideInHorizontally(animationSpec = slideInSpec(), initialOffsetX = { -it / 3 }) +
+        fadeIn(animationSpec = fadeSpec(), initialAlpha = 0.5f)
+
+private fun popExit(): ExitTransition =
+    slideOutHorizontally(animationSpec = slideOutSpec(), targetOffsetX = { it }) +
+        fadeOut(animationSpec = fadeSpec(), targetAlpha = 0.5f)
+
+// Transiciones hero para el Editor: misma lógica slide que push/pop.
+private fun heroEnter(): EnterTransition =
+    slideInHorizontally(animationSpec = slideInSpec(), initialOffsetX = { it }) +
+        fadeIn(animationSpec = fadeSpec(), initialAlpha = 0.5f)
+
+private fun heroExit(): ExitTransition =
+    slideOutHorizontally(animationSpec = slideOutSpec(), targetOffsetX = { -it / 3 }) +
+        fadeOut(animationSpec = fadeSpec(), targetAlpha = 0.5f)
+
+private fun heroPopEnter(): EnterTransition =
+    slideInHorizontally(animationSpec = slideInSpec(), initialOffsetX = { -it / 3 }) +
+        fadeIn(animationSpec = fadeSpec(), initialAlpha = 0.5f)
+
+private fun heroPopExit(): ExitTransition =
+    slideOutHorizontally(animationSpec = slideOutSpec(), targetOffsetX = { it }) +
+        fadeOut(animationSpec = fadeSpec(), targetAlpha = 0.5f)
 
 @Composable
 fun AppNav() {
     val nav = rememberNavController()
     val container = LocalAppContainer.current
-    var showSplash by remember { mutableStateOf(true) }
     var showOnboarding by remember {
         mutableStateOf(!container.userPreferences.onboardingDone)
     }
+    var pendingUpdate by remember { mutableStateOf<GitHubRelease?>(null) }
+    var pendingCritical by remember { mutableStateOf(false) }
+    var pendingSize by remember { mutableStateOf(0L) }
+    var showUpdateDialog by remember { mutableStateOf(false) }
+
+    // Pre-warm: arrancar el chequeo de updates en paralelo con el splash
+    // para que el resultado esté listo cuando la app sea visible.
+    LaunchedEffect(Unit) {
+        when (val result = container.updateManager.checkForUpdate()) {
+            is CheckResult.Available -> {
+                pendingUpdate = result.release
+                pendingCritical = result.isCritical
+                pendingSize = result.sizeBytes
+            }
+            else -> {} // up-to-date, postponed o error
+        }
+    }
+
+    // Mostrar el dialog apenas el update esté listo y no esté ya visible.
+    LaunchedEffect(pendingUpdate) {
+        if (pendingUpdate != null) {
+            showUpdateDialog = true
+        }
+    }
+    // El sistema de credenciales fue removido en v0.9.2-jw: la app
+    // entra directo al Home tras el splash. LicenseManager y
+    // AccessScreen siguen existiendo en el repo por si se quiere
+    // restituir el gate más adelante.
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(OreoPalette.Bg0),
     ) {
+        // Push transitions con spring — la pantalla nueva entra desde
+        // la derecha con inercia natural y rebote sutil al llegar.
         NavHost(
             navController = nav,
             startDestination = Routes.Home,
-            // Push iOS: el destino entra desde la derecha con spring
-            // críticamente amortiguado (sin overshoot) + fade rápido +
-            // scale apenas perceptible.
-            enterTransition = {
-                slideInHorizontally(
-                    animationSpec = slideSpring(),
-                    initialOffsetX = { it },
-                ) + fadeIn(animationSpec = fadeSpec()) +
-                    scaleIn(
-                        animationSpec = scaleSpring(),
-                        initialScale = 0.985f,
-                    )
-            },
-            // El de origen se va con parallax (un tercio a la
-            // izquierda) + fade. Mismo spring que la entrada.
-            exitTransition = {
-                slideOutHorizontally(
-                    animationSpec = slideSpring(),
-                    targetOffsetX = { -it / 3 },
-                ) + fadeOut(animationSpec = fadeSpec())
-            },
-            // Pop: la origen vuelve desde la izquierda (parallax
-            // inverso).
-            popEnterTransition = {
-                slideInHorizontally(
-                    animationSpec = slideSpring(),
-                    initialOffsetX = { -it / 3 },
-                ) + fadeIn(animationSpec = fadeSpec())
-            },
-            // Pop: el destino se va deslizando hacia la derecha.
-            popExitTransition = {
-                slideOutHorizontally(
-                    animationSpec = slideSpring(),
-                    targetOffsetX = { it },
-                ) + fadeOut(animationSpec = fadeSpec()) +
-                    scaleOut(
-                        animationSpec = scaleSpring(),
-                        targetScale = 0.985f,
-                    )
-            },
+            enterTransition = { pushEnter() },
+            exitTransition = { pushExit() },
+            popEnterTransition = { popEnter() },
+            popExitTransition = { popExit() },
         ) {
             composable(Routes.Home) {
                 HomeScreen(
-                    onNew = { nav.navigate(Routes.editor(0L)) },
+                    onNew = { category ->
+                        nav.navigate(Routes.editor(0L, category))
+                    },
                     onOpen = { id -> nav.navigate(Routes.editor(id)) },
                     onSettings = { nav.navigate(Routes.Settings) },
+                    onOpenServicio = { nav.navigate(Routes.ServicioCampo) },
                 )
             }
             composable(
                 Routes.Editor,
-                arguments = listOf(navArgument("id") { type = NavType.LongType }),
+                // Hero transition: scale + fade con spring para que
+                // la tarjeta parezca "expandirse" hacia el editor.
+                enterTransition = { heroEnter() },
+                exitTransition = { heroExit() },
+                popEnterTransition = { heroPopEnter() },
+                popExitTransition = { heroPopExit() },
+                arguments = listOf(
+                    navArgument("id") { type = NavType.LongType },
+                    navArgument("cat") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = ""
+                    },
+                ),
             ) { entry ->
                 val id = entry.arguments?.getLong("id") ?: 0L
+                val cat = entry.arguments?.getString("cat").orEmpty()
                 EditorScreen(
                     discursoId = id,
+                    initialCategoryKey = cat.ifBlank { null },
                     onBack = { nav.popBackStack() },
                     onSaved = { _ -> nav.popBackStack() },
+                    onReaderMode = { noteId -> nav.navigate(Routes.reader(noteId)) },
                 )
             }
             composable(Routes.Settings) {
                 SettingsScreen(
                     onBack = { nav.popBackStack() },
                     onTrash = { nav.navigate(Routes.Trash) },
+                    onNavigateTo = { route ->
+                        nav.navigate(route) {
+                            launchSingleTop = true
+                        }
+                    },
                 )
             }
             composable(Routes.Trash) {
@@ -157,16 +225,29 @@ fun AppNav() {
                     onOpen = { id -> nav.navigate(Routes.editor(id)) },
                 )
             }
+            composable(Routes.ServicioCampo) {
+                ServicioCampoScreen(
+                    onBack = { nav.popBackStack() },
+                    onNavigateTo = { route ->
+                        nav.navigate(route) {
+                            launchSingleTop = true
+                        }
+                    },
+                )
+            }
+            composable(
+                Routes.Reader,
+                arguments = listOf(navArgument("id") { type = NavType.LongType }),
+            ) { entry ->
+                val id = entry.arguments?.getLong("id") ?: return@composable
+                ReaderScreen(
+                    discursoId = id,
+                    onBack = { nav.popBackStack() },
+                )
+            }
         }
 
-        if (showSplash) {
-            SplashScreen(onFinished = { showSplash = false })
-        }
-
-        // Onboarding queda por encima del splash sólo en el primer
-        // arranque. Una vez completado se persiste el flag para que
-        // no vuelva a aparecer.
-        if (!showSplash && showOnboarding) {
+        if (showOnboarding) {
             OnboardingScreen(
                 onFinish = {
                     container.userPreferences.onboardingDone = true
@@ -174,5 +255,25 @@ fun AppNav() {
                 },
             )
         }
+
+        if (showUpdateDialog && pendingUpdate != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .blur(32.dp)
+                    .background(Color.Black.copy(alpha = 0.5f)),
+            )
+            UpdateDialog(
+                release = pendingUpdate!!,
+                isCritical = pendingCritical,
+                sizeBytes = pendingSize,
+                updateManager = container.updateManager,
+                onDismiss = {
+                    showUpdateDialog = false
+                    pendingUpdate = null
+                },
+            )
+        }
     }
 }
+
